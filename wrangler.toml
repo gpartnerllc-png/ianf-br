@@ -1,0 +1,70 @@
+# IANF - Sistema de Balanços e Nota Fiscal
+# Cloudflare Worker: D1 (banco) + KV (sessões/cache) + Workers AI (IA)
+
+name = "ianf"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ianf-db"
+database_id = "92b72b13-5358-4422-98cf-a7ef74516082"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "ab60a70a04c347599745f08b89979929"
+
+[ai]
+binding = "AI"
+
+[vars]
+ENVIRONMENT = "production"
+APP_NAME = "IANF"
+APP_VERSION = "2.0.0"
+# Alíquotas padrão do regime MEI (podem ser alteradas por empresa)
+CBS_MEI = "0.009"
+IBS_MEI = "0.001"
+# Alíquotas padrão da Reforma Tributária 2026 (regime padrão)
+CBS_PADRAO = "0.265"
+IBS_PADRAO = "0.177"
+# Sandbox Spedy (true = ambiente de testes)
+SPEDY_SANDBOX = "false"
+# Iterações PBKDF2: 15000 cabe no CPU de 10ms do plano Free.
+# Em plano pago (CPU 30s), eleve para 600000 via wrangler secret put PBKDF2_ITERATIONS.
+PBKDF2_ITERATIONS = "15000"
+# Pagamento / maquininha (Infinitepay)
+PAYMENT_URL = "https://loja.infinitepay.io/droppfy"
+PAYMENT_POS_PACKAGE = "com.infinitepay.checkout"
+PAYMENT_POS_SCHEME = "infinitepay"
+# Checkout de assinatura (franquia mensal R$ 289,80)
+PAYMENT_HANDLE = "droppfy"
+# URL pública do worker (usada nos webhooks da InfinitePay)
+IANF_URL = "https://ianf.contatodroppfy.workers.dev"
+# Sincronização de vendas com o núcleo legado (AWS Lambda, repo ianf-br)
+LAMBDA_SYNC_URL = "https://4djefisdvvgqv4jl3j5x35mssi0vxfmv.lambda-url.sa-east-1.on.aws/"
+
+# Rotina diária de assinaturas (avisos WhatsApp + pausa)
+[triggers]
+crons = ["0 12 * * *"]
+
+# ============================================
+# SEGREDOS - NUNCA COMMITAR VALORES AQUI.
+# Use: wrangler secret put <NOME>
+# ============================================
+# ADMIN_EMAIL        -> e-mail do administrador raiz (bootstrap)
+# ADMIN_PASSWORD     -> senha inicial do administrador
+# SESSION_TTL_HOURS  -> opcional
+# SPEDY_API_KEY      -> X-Api-Key da conta Spedy
+# ZAPSIGN_API_KEY    -> czk_live_... (Certificados ZapSign)
+# SERPRO_CONSUMER_KEY / SERPRO_CONSUMER_SECRET -> credenciais Serpro (PIN/IA)
+# SERPRO_DIVIDA_PATH   -> opcional, caminho da API Dívida Ativa (PGFN) se mudar no gateway
+# PAYMENT_URL        -> URL do link de pagamento/maquininha (ex.: loja.infinitepay.io/...)
+# PAYMENT_POS_PACKAGE -> pacote Android do app de pagamento na maquininha (ex.: com.infinitepay.checkout)
+# INFINITEPAY_API_KEY -> inchk_... (chave da API Checkout InfinitePay - cobrança da assinatura)
+# WHATSAPP_API_URL    -> endpoint do gateway WhatsApp (recebe POST {phone, message})
+# WHATSAPP_API_KEY    -> opcional, token Bearer do gateway WhatsApp
