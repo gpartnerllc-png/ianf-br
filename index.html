@@ -393,6 +393,21 @@
                     </div>
                     <div id="apibrasil-result" class="result-card mt-3"></div>
                 </div>
+                <div class="panel glass">
+                    <h3 class="panel-title">🗂️ DirectData <span class="panel-sub">Consultas Big Data por consumo</span></h3>
+                    <p class="muted small">Cadastral, crédito, fiscal, sanções, processos e veicular — preço debitado do saldo DirectData por consulta.</p>
+                    <div class="search-row mt-3">
+                        <select class="field" id="ddEndpoint" style="max-width:280px" onchange="UI.ddEndpointChange()"></select>
+                    </div>
+                    <div class="search-row mt-3 hidden" id="ddEndpointCustomRow">
+                        <input class="field" id="ddEndpointCustom" placeholder="Nome do endpoint (ex: CadastroPessoaFisica)">
+                    </div>
+                    <div class="search-row mt-3">
+                        <input class="field" id="ddParam" placeholder="CPF, CNPJ, placa, NIS...">
+                        <button class="btn btn-gradient" onclick="UI.consultarDirectdata()">Consultar</button>
+                    </div>
+                    <div id="dd-result" class="result-card mt-3"></div>
+                </div>
             </div>
         </section>
 

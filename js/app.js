@@ -1144,6 +1144,150 @@ async function apibrasilSaldo() {
   }
 }
 
+// ---------- DirectData (consultas Big Data por consumo) ----------
+// Endpoints do catálogo: https://www.directd.com.br/central-de-ajuda/apis/catalogo
+const DIRECTDATA_CATALOGO = [
+  { g: 'Cadastral', n: 'Cadastro Pessoa Física', e: 'CadastroPessoaFisica', p: 'Cpf', r: 'R$ 0,16' },
+  { g: 'Cadastral', n: 'Cadastro PF Plus', e: 'CadastroPessoaFisicaPlus', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Cadastral', n: 'Cadastro Pessoa Jurídica', e: 'CadastroPessoaJuridica', p: 'Cnpj', r: 'R$ 0,16' },
+  { g: 'Cadastral', n: 'Cadastro PJ Plus', e: 'CadastroPessoaJuridicaPlus', p: 'Cnpj', r: 'R$ 0,36' },
+  { g: 'Cadastral', n: 'CNH', e: 'ConsultaCNH', p: 'Cpf', r: 'R$ 0,90' },
+  { g: 'Cadastral', n: 'CNH Plus', e: 'ConsultaCNHPlus', p: 'Cpf', r: 'R$ 1,45' },
+  { g: 'Cadastral', n: 'CNH Completa', e: 'ConsultaCNHCompleta', p: 'Cpf', r: 'R$ 4,85' },
+  { g: 'Cadastral', n: 'Óbito', e: 'ConsultaObito', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Cadastral', n: 'PIS/NIT', e: 'ConsultaPIS', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Cadastral', n: 'OAB (advogados)', e: 'ConsultaOAB', p: 'Nome', r: 'R$ 0,36' },
+  { g: 'Cadastral', n: 'Benefícios Sociais (12m)', e: 'ConsultaBeneficiosSociais', p: 'Cpf', r: 'R$ 0,75' },
+  { g: 'Cadastral', n: 'Bolsa Família', e: 'ConsultaBolsaFamilia', p: 'Nis', r: 'R$ 0,36' },
+  { g: 'Cadastral', n: 'Vínculo Empregatício', e: 'VinculoEmpregaticio', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Crédito', n: 'Score', e: 'ConsultaScore', p: 'Cpf', r: '' },
+  { g: 'Crédito', n: 'SCR Bacen (analítica)', e: 'ConsultaSCRBacen', p: 'Cpf', r: 'R$ 3,90' },
+  { g: 'Crédito', n: 'Protestos', e: 'ConsultaProtestos', p: 'Cpf', r: 'R$ 2,95' },
+  { g: 'Crédito', n: 'Dossiê Direct Data', e: 'DossieDirectData', p: 'Cnpj', r: 'R$ 2,40' },
+  { g: 'Crédito', n: 'Antifraude Chave PIX', e: 'ConsultaPix', p: 'ChavePix', r: 'R$ 1,55' },
+  { g: 'Fiscal e Tributário', n: 'Certidão Conjunta de Débitos', e: 'CertidaoConjuntaDebitos', p: 'Cnpj', r: 'R$ 0,36' },
+  { g: 'Fiscal e Tributário', n: 'Certidão Negativa de Débitos', e: 'CertidaoNegativaDebitos', p: 'Cnpj', r: 'R$ 0,36' },
+  { g: 'Fiscal e Tributário', n: 'NF-e Completa', e: 'ConsultaNFE', p: 'Chave', r: 'R$ 1,30' },
+  { g: 'Fiscal e Tributário', n: 'Simples Nacional', e: 'ConsultaSimplesNacional', p: 'Cnpj', r: 'R$ 0,36' },
+  { g: 'Processos', n: 'Processos Judiciais', e: 'ConsultaProcessosJudiciais', p: 'Cpf', r: 'R$ 1,10' },
+  { g: 'Ambiental', n: 'IBAMA CND', e: 'IbamaCertidaoNegativaDebitos', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Ambiental', n: 'IBAMA Embargo', e: 'IbamaCertidaoEmbargo', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Ambiental', n: 'IBAMA Autuações', e: 'IbamaAutuacoes', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'CEIS', e: 'CadastroEmpresasInidoneasSuspensas', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'CEPIM', e: 'CadastroEntidadesPrivadasImpedidas', p: 'Cnpj', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'CNEP', e: 'CadastroNacionalEmpresasPunidas', p: 'Cnpj', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'CNIA (improbidade)', e: 'CadastroNacionalImprobidadeAdministrativa', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'CNJ Mandados de Prisão', e: 'CNJMandadosPrisao', p: 'Cpf', r: 'R$ 0,72' },
+  { g: 'Sanções e Restrições', n: 'PEP', e: 'PessoaExpostaPoliticamente', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'PEP Estendida', e: 'PEPParentescos', p: 'Cpf', r: 'R$ 0,72' },
+  { g: 'Sanções e Restrições', n: 'PGFN Devedores da União', e: 'PGFNListaDevedoresUniao', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'Polícia Civil Antecedentes', e: 'PoliciaCivilAntecedentesCriminais', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'Polícia Federal Antecedentes', e: 'PoliciaFederalAntecedentesCriminais', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'TCU Licitante Inidôneo', e: 'TCUCertidaoNegativaLicitanteInidoneo', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'TCU Consolidada PJ', e: 'TCUConsultaConsolidadaPessoaJuridica', p: 'Cnpj', r: 'R$ 0,72' },
+  { g: 'Sanções e Restrições', n: 'TJ Certidão Cível/Criminal/Fiscal', e: 'TJCertidaoCivelCriminalFiscal', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'TRF Certidão', e: 'TribunalRegionalFederal', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'Trabalho Forçado', e: 'VerificacaoEmpregadorTrabalhoForcado', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'BACEN Inabilitados', e: 'BancoCentralInabilitados', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções e Restrições', n: 'BACEN Proibidos', e: 'BancoCentralProibidos', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Societário', n: 'Beneficiário Final (UBO)', e: 'ConsultaBeneficiarioFinal', p: 'Cnpj', r: 'R$ 1,44' },
+  { g: 'Societário', n: 'Vínculos Societários', e: 'VinculosSocietarios', p: 'Cpf', r: 'R$ 1,84' },
+  { g: 'Societário', n: 'AML', e: 'ConsultaAML', p: 'Cpf', r: 'R$ 0,72' },
+  { g: 'Trabalhista', n: 'MPT', e: 'ConsultaMPT', p: 'Cnpj', r: 'R$ 1,30' },
+  { g: 'Trabalhista', n: 'CNDT (débitos trabalhistas)', e: 'CertidaoDebitosTrabalhistas', p: 'Cnpj', r: 'R$ 0,36' },
+  { g: 'Regularidade', n: 'FGTS (CRF)', e: 'CertidaoRegularidadeFGTS', p: 'Cnpj', r: 'R$ 0,36' },
+  { g: 'Regularidade', n: 'TSE', e: 'ConsultaTSE', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Sanções Internacionais', n: 'OFAC', e: 'OFAC', p: 'Nome', r: 'R$ 0,36' },
+  { g: 'Sanções Internacionais', n: 'INTERPOL', e: 'Interpol', p: 'Nome', r: 'R$ 0,36' },
+  { g: 'Veicular', n: 'Consulta Veicular Nacional', e: 'ConsultaVeicular', p: 'Placa', r: 'R$ 1,10' },
+  { g: 'Veicular', n: 'Histórico de Proprietários', e: 'ConsultaVeicularHistorico', p: 'Placa', r: 'R$ 4,10' },
+  { g: 'Veicular', n: 'FIPE', e: 'ConsultaVeicularFipe', p: 'Placa', r: 'R$ 3,98' },
+  { g: 'Veicular', n: 'RENAINF (multas)', e: 'Renainf', p: 'Placa', r: 'R$ 2,10' },
+  { g: 'Veicular', n: 'RENAJUD (restrições)', e: 'Renajud', p: 'Placa', r: 'R$ 1,90' },
+  { g: 'Veicular', n: 'Roubo e Furto', e: 'ConsultaRouboFurto', p: 'Placa', r: 'R$ 1,45' },
+  { g: 'Veicular', n: 'Recall', e: 'RecallVeicular', p: 'Placa', r: 'R$ 1,20' },
+  { g: 'Outros', n: 'Endpoint personalizado...', e: '__custom', p: '', r: '' },
+];
+
+function ddInit() {
+  const sel = $('ddEndpoint');
+  if (!sel) return;
+  const grupos = {};
+  DIRECTDATA_CATALOGO.forEach((c) => { (grupos[c.g] ||= []).push(c); });
+  sel.innerHTML = Object.entries(grupos)
+    .map(([g, itens]) => `<optgroup label="${g}">${itens.map((c) => `<option value="${c.e}">${c.n}${c.r ? ` · ${c.r}` : ''}</option>`).join('')}</optgroup>`)
+    .join('');
+  ddEndpointChange();
+}
+
+function ddEndpointChange() {
+  const sel = $('ddEndpoint');
+  const custom = sel?.value === '__custom';
+  $('ddEndpointCustomRow')?.classList.toggle('hidden', !custom);
+  if (custom) $('ddEndpointCustom')?.focus();
+  const item = DIRECTDATA_CATALOGO.find((c) => c.e === sel?.value);
+  const inp = $('ddParam');
+  if (inp && item?.p) inp.placeholder = `Ex: 000.000.000-00 (${item.p})`;
+}
+
+function ddEsc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+function ddBloque(obj, depth = 0) {
+  if (depth > 5) return `<div class="kv"><span>Dados</span><b>${ddEsc(JSON.stringify(obj))}</b></div>`;
+  if (obj === null || obj === undefined) return '<p class="muted small">Sem retorno.</p>';
+  if (Array.isArray(obj)) {
+    if (!obj.length) return '<p class="muted small">Nenhum registro encontrado.</p>';
+    return obj.map((item, i) => {
+      if (item !== null && typeof item === 'object') {
+        return `<div class="dd-sub"><p class="muted small">Registro ${i + 1}</p>${ddBloque(item, depth + 1)}</div>`;
+      }
+      return `<div class="kv"><span>${i + 1}</span><b>${ddEsc(item)}</b></div>`;
+    }).join('');
+  }
+  if (typeof obj !== 'object') return `<div class="kv"><span>Valor</span><b>${ddEsc(obj)}</b></div>`;
+  return Object.entries(obj).map(([k, v]) => {
+    if (v === null || v === undefined) return '';
+    const label = k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+    if (typeof v === 'object') return `<div class="kv"><span>${ddEsc(label)}</span>${ddBloque(v, depth + 1)}</div>`;
+    return `<div class="kv"><span>${ddEsc(label)}</span><b>${ddEsc(v)}</b></div>`;
+  }).join('');
+}
+
+async function consultarDirectdata() {
+  const sel = $('ddEndpoint');
+  const custom = sel?.value === '__custom';
+  const endpoint = (custom ? ($('ddEndpointCustom')?.value || '') : (sel?.value || '')).trim();
+  if (!endpoint) return alert('Escolha uma consulta no catálogo ou informe o endpoint.');
+  const item = DIRECTDATA_CATALOGO.find((c) => c.e === sel?.value);
+  const valor = ($('ddParam')?.value || '').trim();
+  if (!valor) return alert('Informe o valor da consulta (CPF, CNPJ, placa...).');
+  const el = $('dd-result');
+  el.innerHTML = `<p class="muted">Consultando DirectData (${ddEsc(endpoint)})...</p>`;
+  try {
+    const params = {};
+    if (custom && valor.includes('=')) {
+      const [k, v] = valor.split('=');
+      params[k.trim()] = v.trim();
+    } else if (item?.p) {
+      params[item.p] = ['Cpf', 'Cnpj', 'Nis'].includes(item.p) ? valor.replace(/\D/g, '') : valor.toUpperCase();
+    } else {
+      const doc = valor.replace(/\D/g, '');
+      params[/^\d{14}$/.test(doc) ? 'Cnpj' : 'Cpf'] = doc;
+    }
+    const data = await api('/integracao/directdata?acao=consultar', { method: 'POST', body: JSON.stringify({ endpoint, params }) });
+    const meta = data.metaDados || {};
+    el.innerHTML = `
+      <h4>${ddEsc(endpoint)}</h4>
+      <p class="muted small">${ddEsc(data.fonte || 'DirectData')}${meta.tempoExecucaoMs ? ` · ${meta.tempoExecucaoMs}ms` : ''}${meta.consultaUid ? ` · uid ${ddEsc(meta.consultaUid)}` : ''}</p>
+      ${ddBloque(data.retorno)}
+      <p class="mt-3 small"><a class="link" href="https://www.directd.com.br/central-de-ajuda/apis/catalogo" target="_blank" rel="noopener">Catálogo DirectData ↗</a></p>`;
+  } catch (erro) {
+    el.innerHTML = `<p class="form-error">${erro.message}</p>`;
+  }
+}
+
 // ---------- Boot ----------
 const UI = {
   calcFiscal, liberarNome, validarNome, adicionarProduto, renderItens, emitirNota,
@@ -1151,6 +1295,7 @@ const UI = {
   sincronizarEntradas, consultarCnpj, consultarCpf, consultarCep,
   consultarPgfn, abrirPgfn, pgfnLinks,
   consultarSerasa, consultarApibrasil, apibrasilSaldo,
+  consultarDirectdata, ddEndpointChange,
   carregarSaldoZapsign, toggleCertForm, criarCertificado, carregarProtocolos,
   enviarChat, analisarNotaIA, alterarUser, removerUser,
   carregarAssinatura, assinar, salvarWhatsapp, imprimirRecibo,
@@ -1161,6 +1306,7 @@ window.UI = UI;
 
 function init() {
   initBackground($('bg-3d'));
+  ddInit();
 
   // Navegação
   document.querySelectorAll('.nav-btn').forEach((b) => b.addEventListener('click', () => {
