@@ -1102,6 +1102,22 @@ async function consultarSerasa() {
 }
 
 // ---------- APIBrasil ----------
+function renderApibrasil(data, cnpj, el) {
+  const c = data.dados?.cnpj || {};
+  const end = c.endereco || c.end || {};
+  el.innerHTML = `
+    <h4>${c.razao_social || c.nome_fantasia || '—'}</h4>
+    <p class="muted small">${data.fonte || 'APIBrasil'}${data.valorConsulta ? ' · tarifa ' + fmt(data.valorConsulta) : ''}</p>
+    <div class="kv"><span>CNPJ</span><b>${c.cnpj || cnpj}</b></div>
+    <div class="kv"><span>Fantasia</span><b>${c.nome_fantasia || '—'}</b></div>
+    <div class="kv"><span>Situação</span><b>${c.situacao_cadastral || '—'}</b></div>
+    <div class="kv"><span>CNAE</span><b>${(c.cnae || []).map((x) => x.descricao || x.codigo || '').filter(Boolean).join(' · ') || '—'}</b></div>
+    <div class="kv"><span>Endereço</span><b>${[end.logradouro, end.numero].filter(Boolean).join(', ') || '—'}</b></div>
+    <div class="kv"><span>Município</span><b>${end.municipio || c.municipio || '—'} / ${end.uf || c.uf || '—'}</b></div>
+    ${(c.socios || []).length ? `<div class="kv"><span>Sócios</span><b>${c.socios.length} registrado(s)</b></div>` : ''}
+    ${data.balance ? `<div class="kv"><span>Saldo após consulta</span><b>${data.balance}</b></div>` : ''}`;
+}
+
 async function consultarApibrasil() {
   const cnpj = ($('apibrasilCnpj')?.value || '').replace(/\D/g, '');
   if (cnpj.length !== 14) return alert('CNPJ incompleto.');
@@ -1109,25 +1125,42 @@ async function consultarApibrasil() {
   el.innerHTML = '<p class="muted">Consultando a APIBrasil...</p>';
   try {
     const data = await api('/integracao/apibrasil?acao=cnpj', { method: 'POST', body: JSON.stringify({ cnpj }) });
-    const c = data.dados?.cnpj || {};
-    const end = c.endereco || c.end || {};
-    el.innerHTML = `
-      <h4>${c.razao_social || c.nome_fantasia || '—'}</h4>
-      <p class="muted small">${data.fonte || ''}${data.valorConsulta ? ' · tarifa ' + fmt(data.valorConsulta) : ''}</p>
-      <div class="kv"><span>CNPJ</span><b>${c.cnpj || cnpj}</b></div>
-      <div class="kv"><span>Fantasia</span><b>${c.nome_fantasia || '—'}</b></div>
-      <div class="kv"><span>Situação</span><b>${c.situacao_cadastral || '—'}</b></div>
-      <div class="kv"><span>CNAE</span><b>${(c.cnae || []).map((x) => x.descricao || x.codigo || '').filter(Boolean).join(' · ') || '—'}</b></div>
-      <div class="kv"><span>Endereço</span><b>${[end.logradouro, end.numero].filter(Boolean).join(', ') || '—'}</b></div>
-      <div class="kv"><span>Município</span><b>${end.municipio || c.municipio || '—'} / ${end.uf || c.uf || '—'}</b></div>
-      ${(c.socios || []).length ? `<div class="kv"><span>Sócios</span><b>${c.socios.length} registrado(s)</b></div>` : ''}
-      ${data.balance ? `<div class="kv"><span>Saldo após consulta</span><b>${data.balance}</b></div>` : ''}`;
+    renderApibrasil(data, cnpj, el);
   } catch (erro) {
-    const recarga = erro.code === 'SALDO_INSUFICIENTE' && erro.data?.rechargeUrl
-      ? `<p class="mt-3"><a class="link" href="${erro.data.rechargeUrl}" target="_blank" rel="noopener">Recarregar saldo ↗</a></p>`
-      : '';
-    el.innerHTML = `<p class="form-error">${erro.message}</p>${recarga}`;
+    if (erro.code === 'SALDO_INSUFICIENTE' && erro.data?.checkout_url) {
+      const valor = Number(erro.data.valor) || 0.05;
+      el.innerHTML = `
+        <p class="form-error">${erro.message}</p>
+        <div class="qr-box"><div id="apibrasil-qr"></div></div>
+        <p class="muted small">Escaneie o QR code e pague <b>${fmt(valor)}</b> via PIX para liberar esta consulta.</p>
+        <p class="muted small" id="apibrasil-pix-status">Aguardando pagamento...</p>`;
+      try { new QRCode($('apibrasil-qr'), { text: erro.data.checkout_url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M }); } catch { /* sem lib de QR */ }
+      pollApibrasilPagamento(erro.data.order_nsu, cnpj, el);
+    } else {
+      el.innerHTML = `<p class="form-error">${erro.message}</p>`;
+    }
   }
+}
+
+// Confirma o pagamento na InfinitePay e reexecuta a consulta automaticamente
+async function pollApibrasilPagamento(orderNsu, cnpj, el) {
+  for (let i = 0; i < 60; i++) { // até ~5 minutos
+    await new Promise((r) => setTimeout(r, 5000));
+    try {
+      const data = await api('/integracao/apibrasil?acao=pagar-consulta', { method: 'POST', body: JSON.stringify({ order_nsu: orderNsu }) });
+      if (data.status === 'pendente') continue;
+      renderApibrasil(data, cnpj, el);
+      return;
+    } catch (erro) {
+      if (erro.code === 'SALDO_INSUFICIENTE') {
+        el.innerHTML = `<p class="form-error">${erro.message}</p>`;
+        return;
+      }
+      // erros transitórios: continua tentando
+    }
+  }
+  const statusEl = $('apibrasil-pix-status');
+  if (statusEl) statusEl.textContent = 'Pagamento não confirmado ainda. Atualize a página e tente a consulta novamente.';
 }
 
 async function apibrasilSaldo() {
@@ -1135,10 +1168,7 @@ async function apibrasilSaldo() {
   el.innerHTML = '<p class="muted">Consultando saldo...</p>';
   try {
     const data = await api('/integracao/apibrasil?acao=saldo', { method: 'POST', body: '{}' });
-    el.innerHTML = `
-      <div class="kv"><span>Saldo</span><b>${data.saldo || '—'}</b></div>
-      ${data.user ? `<div class="kv"><span>Conta</span><b>${data.user.first_name || '—'} (${data.user.email || '—'})</b></div>` : ''}
-      ${data.rechargeUrl ? `<p class="mt-3"><a class="link" href="${data.rechargeUrl}" target="_blank" rel="noopener">Recarregar saldo ↗</a></p>` : ''}`;
+    el.innerHTML = `<div class="kv"><span>Saldo</span><b>${data.saldo || '—'}</b></div>`;
   } catch (erro) {
     el.innerHTML = `<p class="form-error">${erro.message}</p>`;
   }

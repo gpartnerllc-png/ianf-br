@@ -20,12 +20,12 @@ function headers(env) {
 }
 
 // Cria um link de checkout (PIX + cartão de crédito, pagamento único)
-export async function criarLinkCheckout(env, { valorCents, descricao, orderNsu, cliente, webhookUrl, validUntil }) {
+export async function criarLinkCheckout(env, { valorCents, descricao, orderNsu, cliente, webhookUrl, validUntil, metodos = ['credit_card', 'pix'] }) {
   const payload = {
     handle: env.PAYMENT_HANDLE || 'droppfy',
     items: [{ quantity: 1, price: valorCents, description: descricao }],
     options: {
-      payment_methods_enabled: ['credit_card', 'pix'],
+      payment_methods_enabled: metodos,
       single_payment: true,
       assured_installments: 3,
       require_delivery_address: false,

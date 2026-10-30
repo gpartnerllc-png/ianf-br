@@ -60,6 +60,7 @@ export async function consultarCnpj(env, cnpj, tipo = 'cnpj') {
       code: d.balance ? 'SALDO_INSUFICIENTE' : 'APIBRASIL_ERRO',
       message: d.message || 'Erro na consulta APIBrasil.',
       saldo: d.balance || null,
+      valorConsulta: d.tax ?? d.valor_consulta ?? null,
       rechargeUrl: String(d.recharge_url || '').startsWith('https://app.apibrasil.io') ? d.recharge_url : null,
     };
   }

@@ -7,6 +7,7 @@ import { serpro, serproEnabled } from '../lib/serpro.js';
 import { serasaEnabled, verificarPessoa, verificarEmpresa, normalizarVerificacao } from '../lib/serasa.js';
 import { apibrasilEnabled, saldo as apibrasilSaldo, consultarCnpj as apibrasilConsultarCnpj } from '../lib/apibrasil.js';
 import { directdataEnabled, consultar as directdataConsultar, validarEndpoint } from '../lib/directdata.js';
+import { infinitepayEnabled, criarLinkCheckout, consultarPagamento } from '../lib/infinitepay.js';
 import { calcularFiscal } from '../lib/fiscal.js';
 
 export async function handleStatus(env) {
@@ -469,6 +470,21 @@ export async function handleApibrasil(env, request) {
     const r = await apibrasilConsultarCnpj(env, cnpj, tipo);
     if (!r.ok) {
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'APIBRASIL_CONSULTA_FALHA', detalhe: `${cnpj} ${r.code || ''}`, ip: getIp(request) });
+      // Sem saldo? Gera cobrança PIX (InfinitePay) para o usuário pagar a consulta na hora
+      if (r.code === 'SALDO_INSUFICIENTE' && infinitepayEnabled(env)) {
+        const cobranca = await criarCobrancaConsulta(env, request, auth.user, {
+          tipo: 'apibrasil', consulta: tipo, parametros: { cnpj, tipo },
+          valorConsulta: r.valorConsulta || 0.04, descricao: 'Consulta IANF · APIBrasil',
+        });
+        if (cobranca) {
+          return json({
+            ok: false, code: 'SALDO_INSUFICIENTE',
+            message: 'Saldo APIBrasil esgotado. Pague esta consulta via PIX para liberar.',
+            checkout_url: cobranca.checkout_url, order_nsu: cobranca.order_nsu,
+            valor: cobranca.valorCents / 100, valorCents: cobranca.valorCents, saldo: r.saldo,
+          }, 402);
+        }
+      }
       const payload = {
         ...r,
         message: r.data?.message || r.message,
@@ -481,7 +497,89 @@ export async function handleApibrasil(env, request) {
     return ok({ dados: r.dados, balance: r.balance, valorConsulta: r.valorConsulta, fonte: 'APIBrasil' });
   }
 
-  return err('Ação inválida (use saldo ou cnpj).', 400, 'ACAO_INVALIDA');
+  if (acao === 'pagar-consulta') {
+    const orderNsu = String(body.order_nsu || '');
+    if (!orderNsu) return err('order_nsu obrigatório.', 400, 'ORDER_INVALIDO');
+    if (!(await rateLimit(env, getIp(request), 'pix'))) return err('Limite de verificações atingido.', 429, 'RATE_LIMIT');
+    const pg = await env.DB.prepare('SELECT * FROM pagamentos_consulta WHERE order_nsu = ? AND user_id = ?')
+      .bind(orderNsu, auth.user.id).first();
+    if (!pg) return err('Cobrança não encontrada.', 404, 'COBRANCA_NAO_ENCONTRADA');
+
+    if (pg.status !== 'pago' && infinitepayEnabled(env)) {
+      try {
+        const slug = String(pg.checkout_url || '').split('/').filter(Boolean).pop() || '';
+        const check = await consultarPagamento(env, { orderNsu, slug });
+        const status = String(check?.status || '').toLowerCase();
+        const pago = check?.paid === true || ['paid', 'settled', 'concluido', 'aprovado'].includes(status);
+        if (pago) {
+          await env.DB.prepare("UPDATE pagamentos_consulta SET status = 'pago', transaction_nsu = ?, paid_at = ? WHERE id = ?")
+            .bind(String(check.transaction_nsu || check.transactionNsu || ''), new Date().toISOString(), pg.id).run();
+          pg.status = 'pago';
+          await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'CONSULTA_PAGA_PIX', detalhe: `${pg.tipo} ${orderNsu}`, ip: getIp(request) });
+        }
+      } catch (e) {
+        console.error('[IANF] Verificação de pagamento da consulta:', e.message);
+      }
+    }
+
+    if (pg.status !== 'pago') return ok({ status: 'pendente' });
+
+    // Pago: reexecuta a consulta com os parâmetros originais
+    const params = JSON.parse(pg.parametros || '{}');
+    if (pg.tipo === 'apibrasil') {
+      const r2 = await apibrasilConsultarCnpj(env, params.cnpj, params.tipo || 'cnpj');
+      if (!r2.ok) {
+        await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'APIBRASIL_CONSULTA_FALHA', detalhe: `${params.cnpj} ${r2.code || ''}`, ip: getIp(request) });
+        const payload = {
+          ...r2,
+          message: r2.code === 'SALDO_INSUFICIENTE'
+            ? 'Pagamento aprovado! Mas o saldo APIBrasil continua esgotado — o operador precisa recarregar a conta para concluir a consulta.'
+            : (r2.data?.message || r2.message || 'Falha ao executar a consulta paga.'),
+          saldo: r2.saldo || null,
+        };
+        return json(payload, payload.code === 'SALDO_INSUFICIENTE' ? 402 : 502);
+      }
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'APIBRASIL_CONSULTA_CNPJ', detalhe: params.cnpj, ip: getIp(request) });
+      return ok({ pago: true, dados: r2.dados, balance: r2.balance, valorConsulta: r2.valorConsulta, fonte: 'APIBrasil' });
+    }
+
+    return err('Tipo de consulta não suportado para reexecução.', 400, 'TIPO_INVALIDO');
+  }
+
+  return err('Ação inválida (use saldo, cnpj ou pagar-consulta).', 400, 'ACAO_INVALIDA');
+}
+
+// Cria a cobrança PIX da consulta (valor + margem de 10%, mínimo R$ 0,05) e registra o pagamento pendente
+async function criarCobrancaConsulta(env, request, user, { tipo, consulta, parametros, valorConsulta, descricao }) {
+  const valorCents = Math.max(5, Math.ceil(Number(valorConsulta || 0.04) * 110));
+  const orderNsu = `IANF-Q-${user.id}-${Date.now()}`;
+  let host = new URL(request.url).origin;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(host)) host = env.IANF_URL || '';
+  const webhookUrl = host.startsWith('https://') ? `${host}/api/webhooks/infinitepay` : undefined;
+
+  const link = await criarLinkCheckout(env, {
+    valorCents,
+    descricao,
+    orderNsu,
+    cliente: { name: user.name || user.email, email: user.email },
+    webhookUrl,
+    validUntil: new Date(Date.now() + 3600 * 1000).toISOString(),
+    metodos: ['pix'],
+  }).catch((e) => {
+    console.error('[IANF] Infinitepay cobrança de consulta:', e.message);
+    return null;
+  });
+
+  const checkoutUrl = link && (link.url || link.checkout_url || link.link);
+  if (!checkoutUrl) return null;
+
+  await env.DB.prepare(`
+    INSERT INTO pagamentos_consulta (user_id, tipo, consulta, parametros, valor_cents, status, checkout_url, order_nsu)
+    VALUES (?, ?, ?, ?, ?, 'pendente', ?, ?)
+  `).bind(user.id, tipo, consulta, JSON.stringify(parametros), valorCents, checkoutUrl, orderNsu).run();
+
+  await audit(env, { userId: user.id, email: user.email, acao: 'CONSULTA_COBRADA_PIX', detalhe: `${tipo} ${orderNsu} ${valorCents}`, ip: getIp(request) });
+  return { checkout_url: checkoutUrl, order_nsu: orderNsu, valorCents };
 }
 
 // ============ DIRECTDATA (CONSULTAS BIG DATA POR CONSUMO) ============

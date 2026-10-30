@@ -225,17 +225,27 @@ export async function handleInfinitepayWebhook(env, request) {
 
   if (!orderNsu) return ok({ recebido: true });
 
+  const pago = ['paid', 'settled', 'approved', 'concluido', 'autorizado'].includes(evento);
+
   let ass = await env.DB.prepare('SELECT * FROM assinaturas WHERE order_nsu = ?').bind(orderNsu).first();
   // Link pago antes de ser substituído por um mais novo: localiza pelo slug na URL
   if (!ass && slug) {
     ass = await env.DB.prepare("SELECT * FROM assinaturas WHERE checkout_url LIKE '%' || ? || '%'").bind(slug).first();
   }
   if (!ass) {
-    console.warn('[IANF] Webhook Infinitepay sem assinatura correspondente:', orderNsu, slug);
+    // Cobrança PIX de consulta (pagamentos_consulta)
+    const pgc = await env.DB.prepare('SELECT * FROM pagamentos_consulta WHERE order_nsu = ?').bind(orderNsu).first();
+    if (pgc) {
+      if (pago && pgc.status !== 'pago') {
+        await env.DB.prepare("UPDATE pagamentos_consulta SET status = 'pago', transaction_nsu = ?, paid_at = ? WHERE id = ?")
+          .bind(transactionNsu, new Date().toISOString(), pgc.id).run();
+        await audit(env, { userId: pgc.user_id, acao: 'CONSULTA_PAGA_WEBHOOK', detalhe: orderNsu });
+      }
+      return ok({ recebido: true });
+    }
+    console.warn('[IANF] Webhook Infinitepay sem cobrança correspondente:', orderNsu, slug);
     return ok({ recebido: true });
   }
-
-  const pago = ['paid', 'settled', 'approved', 'concluido', 'autorizado'].includes(evento);
 
   if (pago) {
     await aplicarPagamento(env, ass, { orderNsu, transactionNsu, valorCents: paidAmount });
