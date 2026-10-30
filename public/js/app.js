@@ -33,6 +33,7 @@ async function api(path, opts = {}) {
     const erro = new Error(data.error?.message || data.message || 'Erro desconhecido');
     erro.code = data.error?.code || '';
     erro.status = res.status;
+    erro.data = data;
     if (res.status === 402 && erro.code === 'ASSINATURA_PAUSADA') UI?.mostrarPausa?.(erro.message);
     throw erro;
   }
@@ -1067,12 +1068,89 @@ async function removerUser(id) {
   } catch (erro) { alert('❌ ' + erro.message); }
 }
 
+// ---------- Serasa Experian (Verify PF/PJ) ----------
+async function consultarSerasa() {
+  const tipo = $('serasaTipo')?.value || 'pf';
+  const doc = ($('serasaDoc')?.value || '').replace(/\D/g, '');
+  if (tipo === 'pf' && doc.length !== 11) return alert('CPF incompleto.');
+  if (tipo === 'pj' && doc.length !== 14) return alert('CNPJ incompleto.');
+  const el = $('serasa-result');
+  el.innerHTML = '<p class="muted">Consultando a Serasa Experian...</p>';
+  try {
+    const body = { document: doc };
+    const nome = ($('serasaNome')?.value || '').trim();
+    if (tipo === 'pf') body.name = nome;
+    else body.companyName = nome;
+    const data = await api(`/integracao/serasa?acao=${tipo}`, { method: 'POST', body: JSON.stringify(body) });
+    const v = data.verificacao || {};
+    const grupos = (v.validationGroups || []).map((g) => `
+      <div class="kv"><span>${g.code} — ${g.message}</span><b>${g.rating ?? '—'}</b></div>
+      ${(g.details || []).map((d) => `<div class="kv indent"><span>${d.type}: ${d.value}</span><b>${d.code} ${d.message}</b></div>`).join('')}`).join('');
+    const score = Number(v.verificationScore);
+    const cor = score >= 700 ? '#059669' : score >= 400 ? '#d97706' : '#b91c1c';
+    el.innerHTML = `
+      <h4>Verificação ${tipo === 'pf' ? 'de CPF' : 'de CNPJ'}</h4>
+      <p class="muted small">${data.fonte || ''}</p>
+      <div style="display:flex;gap:10px;margin:10px 0">
+        <div class="kv" style="flex:1"><span>Score</span><b style="color:${cor}">${v.verificationScore ?? '—'}</b></div>
+        <div class="kv" style="flex:1"><span>Risco</span><b>${v.verificationRisk || '—'}</b></div>
+      </div>
+      ${grupos || '<p class="muted small">Nenhum grupo de validação retornado.</p>'}`;
+  } catch (erro) {
+    el.innerHTML = `<p class="form-error">${erro.message}</p>`;
+  }
+}
+
+// ---------- APIBrasil ----------
+async function consultarApibrasil() {
+  const cnpj = ($('apibrasilCnpj')?.value || '').replace(/\D/g, '');
+  if (cnpj.length !== 14) return alert('CNPJ incompleto.');
+  const el = $('apibrasil-result');
+  el.innerHTML = '<p class="muted">Consultando a APIBrasil...</p>';
+  try {
+    const data = await api('/integracao/apibrasil?acao=cnpj', { method: 'POST', body: JSON.stringify({ cnpj }) });
+    const c = data.dados?.cnpj || {};
+    const end = c.endereco || c.end || {};
+    el.innerHTML = `
+      <h4>${c.razao_social || c.nome_fantasia || '—'}</h4>
+      <p class="muted small">${data.fonte || ''}${data.valorConsulta ? ' · tarifa ' + fmt(data.valorConsulta) : ''}</p>
+      <div class="kv"><span>CNPJ</span><b>${c.cnpj || cnpj}</b></div>
+      <div class="kv"><span>Fantasia</span><b>${c.nome_fantasia || '—'}</b></div>
+      <div class="kv"><span>Situação</span><b>${c.situacao_cadastral || '—'}</b></div>
+      <div class="kv"><span>CNAE</span><b>${(c.cnae || []).map((x) => x.descricao || x.codigo || '').filter(Boolean).join(' · ') || '—'}</b></div>
+      <div class="kv"><span>Endereço</span><b>${[end.logradouro, end.numero].filter(Boolean).join(', ') || '—'}</b></div>
+      <div class="kv"><span>Município</span><b>${end.municipio || c.municipio || '—'} / ${end.uf || c.uf || '—'}</b></div>
+      ${(c.socios || []).length ? `<div class="kv"><span>Sócios</span><b>${c.socios.length} registrado(s)</b></div>` : ''}
+      ${data.balance ? `<div class="kv"><span>Saldo após consulta</span><b>${data.balance}</b></div>` : ''}`;
+  } catch (erro) {
+    const recarga = erro.code === 'SALDO_INSUFICIENTE' && erro.data?.rechargeUrl
+      ? `<p class="mt-3"><a class="link" href="${erro.data.rechargeUrl}" target="_blank" rel="noopener">Recarregar saldo ↗</a></p>`
+      : '';
+    el.innerHTML = `<p class="form-error">${erro.message}</p>${recarga}`;
+  }
+}
+
+async function apibrasilSaldo() {
+  const el = $('apibrasil-result');
+  el.innerHTML = '<p class="muted">Consultando saldo...</p>';
+  try {
+    const data = await api('/integracao/apibrasil?acao=saldo', { method: 'POST', body: '{}' });
+    el.innerHTML = `
+      <div class="kv"><span>Saldo</span><b>${data.saldo || '—'}</b></div>
+      ${data.user ? `<div class="kv"><span>Conta</span><b>${data.user.first_name || '—'} (${data.user.email || '—'})</b></div>` : ''}
+      ${data.rechargeUrl ? `<p class="mt-3"><a class="link" href="${data.rechargeUrl}" target="_blank" rel="noopener">Recarregar saldo ↗</a></p>` : ''}`;
+  } catch (erro) {
+    el.innerHTML = `<p class="form-error">${erro.message}</p>`;
+  }
+}
+
 // ---------- Boot ----------
 const UI = {
   calcFiscal, liberarNome, validarNome, adicionarProduto, renderItens, emitirNota,
   toggleScanner, pagarMaquininha, carregarNotas, consultarNota, cancelarNota, imprimirNota,
   sincronizarEntradas, consultarCnpj, consultarCpf, consultarCep,
   consultarPgfn, abrirPgfn, pgfnLinks,
+  consultarSerasa, consultarApibrasil, apibrasilSaldo,
   carregarSaldoZapsign, toggleCertForm, criarCertificado, carregarProtocolos,
   enviarChat, analisarNotaIA, alterarUser, removerUser,
   carregarAssinatura, assinar, salvarWhatsapp, imprimirRecibo,

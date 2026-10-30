@@ -2,7 +2,7 @@ import { json, err, ok, audit, getIp, readBody } from './lib/utils.js';
 import { bootstrapAdmin, handleRegister, handleLogin, handleLogout, handleMe, handleTrocarSenha } from './routes/auth.js';
 import { handleCalcular, handleRegimes, handleDre, handleDreComparativo, handleLancamentos, handleLancamentoItem, handleEmpresas, handleEmpresaItem } from './routes/fiscal.js';
 import { handleNotas, handleNotaItem, handleSincronizarEntradas, handleConsultarNota } from './routes/notas.js';
-import { handleStatus, handleCnpj, handleCpf, handleCep, handleSpedy, handleZapsign, handleZapsignProtocolo, handleZapsignVerificar, handleSerpro, handlePgfn } from './routes/integracao.js';
+import { handleStatus, handleCnpj, handleCpf, handleCep, handleSpedy, handleZapsign, handleZapsignProtocolo, handleZapsignVerificar, handleSerpro, handlePgfn, handleSerasa, handleApibrasil } from './routes/integracao.js';
 import { handleUsers, handleUserItem, handleAuditoria, handleMetricas } from './routes/admin.js';
 import { handleInsight, handleChat, handleClassificar, handleAnalisarNota } from './routes/ai.js';
 import { handleAssinatura, handleAssinar, handleAssinaturaWhatsapp, handleAssinaturaRecibo, handleInfinitepayWebhook, processarAssinaturasDiarias } from './routes/assinatura.js';
@@ -105,6 +105,8 @@ async function routeApi(env, request, url) {
   if (path === '/api/integracao/zapsign/verificar' && method === 'POST') return handleZapsignVerificar(env, request);
   if (path === '/api/integracao/serpro' && method === 'GET') return handleSerpro(env, request);
   if (path === '/api/integracao/pgfn' && method === 'GET') return handlePgfn(env, request);
+  if (path === '/api/integracao/serasa' && method === 'POST') return handleSerasa(env, request);
+  if (path === '/api/integracao/apibrasil' && method === 'POST') return handleApibrasil(env, request);
 
   if (path === '/api/ia/insight' && method === 'GET') return handleInsight(env, request);
   if (path === '/api/ia/chat' && method === 'POST') return handleChat(env, request);

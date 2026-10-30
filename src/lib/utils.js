@@ -76,7 +76,7 @@ export async function audit(env, { userId = null, email = '', acao, detalhe = ''
 }
 
 const RATE_WINDOW = 60;
-const RATE_LIMITS = { default: 60, login: 10, ai: 10, cnpj: 30 };
+const RATE_LIMITS = { default: 60, login: 10, ai: 10, cnpj: 30, serasa: 10, apibrasil: 20 };
 
 export async function rateLimit(env, ip, key = 'default') {
   const limit = RATE_LIMITS[key] || RATE_LIMITS.default;

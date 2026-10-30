@@ -4,6 +4,8 @@ import { consultarCnpj, consultarCep, consultarCpfReceita } from '../lib/brasila
 import { spedy, spedyEnabled, montarOrderPayload, montarNfsePayload } from '../lib/spedy.js';
 import { zapsign, zapsignEnabled, montarProtocoloEcpf, montarProtocoloEcnpj } from '../lib/zapsign.js';
 import { serpro, serproEnabled } from '../lib/serpro.js';
+import { serasaEnabled, verificarPessoa, verificarEmpresa, normalizarVerificacao } from '../lib/serasa.js';
+import { apibrasilEnabled, saldo as apibrasilSaldo, consultarCnpj as apibrasilConsultarCnpj } from '../lib/apibrasil.js';
 import { calcularFiscal } from '../lib/fiscal.js';
 
 export async function handleStatus(env) {
@@ -15,6 +17,8 @@ export async function handleStatus(env) {
     { nome: 'Spedy (NF-e/NFS-e)', status: spedyEnabled(env) ? 'online' : 'pendente', detalhe: spedyEnabled(env) ? 'Chave configurada' : 'Defina SPEDY_API_KEY' },
     { nome: 'ZapSign Certificados', status: zapsignEnabled(env) ? 'online' : 'pendente', detalhe: zapsignEnabled(env) ? 'Chave configurada' : 'Defina ZAPSIGN_API_KEY' },
     { nome: 'Serpro PIN/IA', status: serproEnabled(env) ? 'online' : 'pendente', detalhe: serproEnabled(env) ? 'Credenciais configuradas' : 'Assinatura em loja.serpro.gov.br' },
+    { nome: 'Serasa Experian (Verify PF/PJ)', status: serasaEnabled(env) ? 'online' : 'pendente', detalhe: serasaEnabled(env) ? 'Token configurado' : 'Defina SERASA_TOKEN' },
+    { nome: 'APIBrasil (Dados CNPJ)', status: apibrasilEnabled(env) ? 'online' : 'pendente', detalhe: apibrasilEnabled(env) ? 'Token configurado' : 'Defina APIBRASIL_TOKEN' },
     { nome: 'PGFN Dívida Ativa (Regularize)', status: serproEnabled(env) ? 'online' : 'pendente', detalhe: serproEnabled(env) ? 'API Serpro configurada' : 'API em loja.serpro.gov.br/consulta-divida-ativa · portal Regularize disponível' },
     { nome: 'AWS Lambda Sync (Vendas)', status: 'online', detalhe: 'FINALIZAR_VENDA enviado automaticamente ao núcleo legado' },
   ];
@@ -346,4 +350,134 @@ export async function handlePgfn(env, request) {
     fonte: 'PGFN / Serpro - Dívida Ativa da União',
     links: PGFN_LINKS,
   });
+}
+
+// ============ SERASA EXPERIAN (VERIFY PF/PJ) ============
+
+export async function handleSerasa(env, request) {
+  const auth = await requireAuth(env, request);
+  if (auth.error) return auth.error;
+  if (!serasaEnabled(env)) {
+    return json({ ok: false, code: 'SERASA_NAO_CONFIGURADO', message: 'Serasa não configurada. Defina o secret SERASA_TOKEN.' }, 503);
+  }
+  if (!(await rateLimit(env, getIp(request), 'serasa'))) return err('Limite de consultas atingido.', 429, 'RATE_LIMIT');
+
+  const url = new URL(request.url);
+  const acao = url.searchParams.get('acao') || 'pf';
+  const body = await readBody(request);
+  const doc = onlyNumbers(body.document || url.searchParams.get('document') || '');
+
+  let resultado;
+  if (acao === 'pf') {
+    // Validação por tamanho apenas: documentos de teste da Serasa (ex.: 99999999999) não têm DV válido
+    if (!/^\d{11}$/.test(doc)) return err('CPF inválido (11 dígitos).', 400, 'CPF_INVALIDO');
+    const person = {
+      document: doc,
+      name: String(body.name || '').slice(0, 120) || undefined,
+      socialName: String(body.socialName || '').slice(0, 120) || undefined,
+      birthDate: /^\d{4}-\d{2}-\d{2}$/.test(body.birthDate || '') ? body.birthDate : undefined,
+      motherName: String(body.motherName || '').slice(0, 120) || undefined,
+      email: String(body.email || '').slice(0, 120) || undefined,
+    };
+    const end = body.address || {};
+    if (end.street || end.zipCode) {
+      person.address = {
+        street: String(end.street || '').slice(0, 120),
+        number: String(end.number || '').slice(0, 20),
+        city: String(end.city || '').slice(0, 80),
+        state: String(end.state || '').slice(0, 2).toUpperCase(),
+        neighborhood: String(end.neighborhood || '').slice(0, 80),
+        zipCode: onlyNumbers(end.zipCode || '').slice(0, 8),
+      };
+    }
+    const tel = body.phone || {};
+    if (tel.areaCode || tel.number) {
+      person.phone = { areaCode: String(tel.areaCode || '').slice(0, 3), number: String(tel.number || '').slice(0, 12) };
+    }
+    resultado = await verificarPessoa(env, person);
+  } else if (acao === 'pj') {
+    // Validação por tamanho apenas: documentos de teste da Serasa (ex.: 99999999999999) não têm DV válido
+    if (!/^\d{14}$/.test(doc)) return err('CNPJ inválido (14 dígitos).', 400, 'CNPJ_INVALIDO');
+    const business = {
+      document: doc,
+      companyName: String(body.companyName || '').slice(0, 160) || undefined,
+      fantasyName: String(body.fantasyName || '').slice(0, 160) || undefined,
+      email: String(body.email || '').slice(0, 120) || undefined,
+      openingDate: /^\d{4}-\d{2}-\d{2}$/.test(body.openingDate || '') ? body.openingDate : undefined,
+    };
+    const end = body.address || {};
+    if (end.street || end.zipCode) {
+      business.address = {
+        street: String(end.street || '').slice(0, 120),
+        number: String(end.number || '').slice(0, 20),
+        city: String(end.city || '').slice(0, 80),
+        state: String(end.state || '').slice(0, 2).toUpperCase(),
+        neighborhood: String(end.neighborhood || '').slice(0, 80),
+        zipCode: onlyNumbers(end.zipCode || '').slice(0, 8),
+      };
+    }
+    if (Array.isArray(body.partners)) {
+      business.partners = body.partners.slice(0, 20).map((p) => ({ document: onlyNumbers(p.document || ''), partnerName: String(p.partnerName || '').slice(0, 120) }));
+    }
+    if (Array.isArray(body.phones)) {
+      business.phones = body.phones.slice(0, 5).map((p) => ({ areaCode: String(p.areaCode || '').slice(0, 3), number: String(p.number || '').slice(0, 12) }));
+    }
+    resultado = await verificarEmpresa(env, business);
+  } else {
+    return err('Ação inválida (use pf ou pj).', 400, 'ACAO_INVALIDA');
+  }
+
+  if (!resultado.ok) {
+    const status = resultado.code === 'SERASA_TOKEN_EXPIRADO' ? 401 : 502;
+    return json(resultado, status);
+  }
+  await audit(env, { userId: auth.user.id, email: auth.user.email, acao: `SERASA_VERIFY_${acao.toUpperCase()}`, detalhe: doc, ip: getIp(request) });
+  return ok({
+    verificacao: normalizarVerificacao(resultado.data),
+    fonte: 'Serasa Experian - Verify (Verificação de Dados PF/PJ)',
+  });
+}
+
+// ============ APIBRASIL (DADOS CNPJ POR CRÉDITO) ============
+
+export async function handleApibrasil(env, request) {
+  const auth = await requireAuth(env, request);
+  if (auth.error) return auth.error;
+  if (!apibrasilEnabled(env)) {
+    return json({ ok: false, code: 'APIBRASIL_NAO_CONFIGURADO', message: 'APIBrasil não configurada. Defina o secret APIBRASIL_TOKEN.' }, 503);
+  }
+
+  const url = new URL(request.url);
+  const acao = url.searchParams.get('acao') || 'saldo';
+  const body = await readBody(request);
+
+  if (acao === 'saldo') {
+    if (!(await rateLimit(env, getIp(request), 'apibrasil'))) return err('Limite de consultas atingido.', 429, 'RATE_LIMIT');
+    const r = await apibrasilSaldo(env);
+    if (!r.ok) return json(r, 502);
+    await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'APIBRASIL_SALDO', detalhe: r.saldo, ip: getIp(request) });
+    return ok({ saldo: r.saldo, user: r.user, rechargeUrl: r.rechargeUrl, fonte: 'APIBrasil' });
+  }
+
+  if (acao === 'cnpj') {
+    const cnpj = onlyNumbers(body.cnpj || url.searchParams.get('cnpj') || '');
+    if (!isValidCnpj(cnpj)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
+    const tipo = ['cnpj', 'lista-socios'].includes(body.tipo) ? body.tipo : 'cnpj';
+    if (!(await rateLimit(env, getIp(request), 'apibrasil'))) return err('Limite de consultas atingido.', 429, 'RATE_LIMIT');
+    const r = await apibrasilConsultarCnpj(env, cnpj, tipo);
+    if (!r.ok) {
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'APIBRASIL_CONSULTA_FALHA', detalhe: `${cnpj} ${r.code || ''}`, ip: getIp(request) });
+      const payload = {
+        ...r,
+        message: r.data?.message || r.message,
+        saldo: r.saldo || r.data?.balance || null,
+        rechargeUrl: r.rechargeUrl || (String(r.data?.recharge_url || '').startsWith('https://app.apibrasil.io') ? r.data.recharge_url : null),
+      };
+      return json(payload, payload.code === 'SALDO_INSUFICIENTE' ? 402 : 502);
+    }
+    await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'APIBRASIL_CONSULTA_CNPJ', detalhe: cnpj, ip: getIp(request) });
+    return ok({ dados: r.dados, balance: r.balance, valorConsulta: r.valorConsulta, fonte: 'APIBrasil' });
+  }
+
+  return err('Ação inválida (use saldo ou cnpj).', 400, 'ACAO_INVALIDA');
 }

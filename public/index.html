@@ -365,6 +365,34 @@
                     </div>
                     <div id="pgfn-links" class="hidden mt-3"></div>
                 </div>
+                <div class="panel glass">
+                    <h3 class="panel-title">🧬 Serasa Verify <span class="panel-sub">Verificação de Dados PF/PJ</span></h3>
+                    <p class="muted small">Valida dados cadastrais na base Serasa Experian e devolve score e risco de verificação por atributo.</p>
+                    <div class="search-row mt-3">
+                        <select class="field" id="serasaTipo" style="max-width:140px">
+                            <option value="pf">CPF (PF)</option>
+                            <option value="pj">CNPJ (PJ)</option>
+                        </select>
+                        <input class="field" id="serasaDoc" placeholder="000.000.000-00">
+                    </div>
+                    <div class="search-row mt-3">
+                        <input class="field" id="serasaNome" placeholder="Nome / Razão social (opcional — melhora o score)">
+                        <button class="btn btn-gradient" onclick="UI.consultarSerasa()">Verificar</button>
+                    </div>
+                    <div id="serasa-result" class="result-card mt-3"></div>
+                </div>
+                <div class="panel glass">
+                    <h3 class="panel-title">💳 APIBrasil <span class="panel-sub">Dados cadastrais PJ por crédito</span></h3>
+                    <p class="muted small">Consulta cadastral de CNPJ e quadro societário pagas por crédito (R$ 0,04 a consulta).</p>
+                    <div class="search-row mt-3">
+                        <input class="field" id="apibrasilCnpj" placeholder="00.000.000/0000-00">
+                        <button class="btn btn-gradient" onclick="UI.consultarApibrasil()">Consultar</button>
+                    </div>
+                    <div class="btn-row mt-3">
+                        <button class="btn btn-ghost small" onclick="UI.apibrasilSaldo()">Ver saldo</button>
+                    </div>
+                    <div id="apibrasil-result" class="result-card mt-3"></div>
+                </div>
             </div>
         </section>
 

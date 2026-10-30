@@ -41,6 +41,9 @@ PBKDF2_ITERATIONS = "15000"
 PAYMENT_URL = "https://loja.infinitepay.io/droppfy"
 PAYMENT_POS_PACKAGE = "com.infinitepay.checkout"
 PAYMENT_POS_SCHEME = "infinitepay"
+# Serasa Experian (Verify PF/PJ) e APIBrasil — bases não-secretas
+SERASA_BASE_URL = "https://api.serasaexperian.com.br/id-fraud/verify-id/v1"
+APIBRASIL_BASE_URL = "https://gateway.apibrasil.io/api/v2"
 # Checkout de assinatura (franquia mensal R$ 289,80)
 PAYMENT_HANDLE = "droppfy"
 # URL pública do worker (usada nos webhooks da InfinitePay)
@@ -63,6 +66,8 @@ crons = ["0 12 * * *"]
 # ZAPSIGN_API_KEY    -> czk_live_... (Certificados ZapSign)
 # SERPRO_CONSUMER_KEY / SERPRO_CONSUMER_SECRET -> credenciais Serpro (PIN/IA)
 # SERPRO_DIVIDA_PATH   -> opcional, caminho da API Dívida Ativa (PGFN) se mudar no gateway
+# SERASA_TOKEN        -> Bearer JWT do IAM Serasa (Verify PF/PJ; token do portal expira em ~1h)
+# APIBRASIL_TOKEN     -> Bearer JWT de 1 ano do painel app.apibrasil.io
 # PAYMENT_URL        -> URL do link de pagamento/maquininha (ex.: loja.infinitepay.io/...)
 # PAYMENT_POS_PACKAGE -> pacote Android do app de pagamento na maquininha (ex.: com.infinitepay.checkout)
 # INFINITEPAY_API_KEY -> inchk_... (chave da API Checkout InfinitePay - cobrança da assinatura)
