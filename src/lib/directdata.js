@@ -46,9 +46,10 @@ export async function consultar(env, endpoint, params = {}) {
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         const meta = (data && typeof data === 'object' && data.metaDados) || {};
+        const semSaldo = meta.resultadoId === 29 || /saldo insuficiente/i.test(String(meta.resultado || meta.mensagem || ''));
         return {
           ok: false,
-          code: 'DIRECTDATA_ERRO',
+          code: semSaldo ? 'SALDO_INSUFICIENTE' : 'DIRECTDATA_ERRO',
           status: res.status,
           message: meta.mensagem || (res.status === 401 ? 'Token inválido, expirado ou IP não liberado na DirectData.' : `DirectData respondeu ${res.status}.`),
           metaDados: meta,

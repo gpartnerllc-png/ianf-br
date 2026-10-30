@@ -504,7 +504,7 @@ export async function handleDirectdata(env, request) {
     const r = await directdataConsultar(env, endpoint, body.params || {});
     if (!r.ok) {
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'DIRECTDATA_CONSULTA_FALHA', detalhe: `${endpoint} ${r.status || r.code || ''}`, ip: getIp(request) });
-      return json(r, 502);
+      return json(r, r.code === 'SALDO_INSUFICIENTE' ? 402 : 502);
     }
     await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'DIRECTDATA_CONSULTA', detalhe: endpoint, ip: getIp(request) });
     return ok({ endpoint, metaDados: r.metaDados, retorno: r.retorno, fonte: 'DirectData' });
