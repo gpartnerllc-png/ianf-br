@@ -45,6 +45,8 @@ PAYMENT_POS_SCHEME = "infinitepay"
 SERASA_BASE_URL = "https://api.serasaexperian.com.br/id-fraud/verify-id/v1"
 SERASA_IAM_BASE_URL = "https://api.serasaexperian.com.br/security/iam/v1/client-identities/login"
 APIBRASIL_BASE_URL = "https://gateway.apibrasil.io/api/v2"
+# DirectData (consultas Big Data por consumo) — token do painel via secret DIRECTDATA_TOKEN
+DIRECTDATA_BASE_URL = "https://apiv3.directd.com.br"
 # Checkout de assinatura (franquia mensal R$ 289,80)
 PAYMENT_HANDLE = "droppfy"
 # URL pública do worker (usada nos webhooks da InfinitePay)
@@ -71,6 +73,7 @@ crons = ["0 12 * * *"]
 # SERASA_CLIENT_ID / SERASA_CLIENT_SECRET -> credenciais client-identities geradas no portal DP
 #   (token renovado automaticamente via /security/iam/v1/client-identities/login + cache KV)
 # APIBRASIL_TOKEN     -> Bearer JWT de 1 ano do painel app.apibrasil.io
+# DIRECTDATA_TOKEN    -> token da DirectData (app.directd.com.br -> Configurações -> Integrações)
 # PAYMENT_URL        -> URL do link de pagamento/maquininha (ex.: loja.infinitepay.io/...)
 # PAYMENT_POS_PACKAGE -> pacote Android do app de pagamento na maquininha (ex.: com.infinitepay.checkout)
 # INFINITEPAY_API_KEY -> inchk_... (chave da API Checkout InfinitePay - cobrança da assinatura)

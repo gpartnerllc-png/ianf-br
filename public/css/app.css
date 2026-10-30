@@ -325,6 +325,7 @@ select.field { appearance: none; cursor: pointer; }
 .result-card .kv { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed rgba(15, 23, 42, 0.1); color: var(--text-muted); }
 .result-card .kv b { color: var(--ink); font-weight: 700; text-align: right; }
 .result-card .kv:last-child { border-bottom: none; }
+.result-card .dd-sub { margin: 6px 0; padding: 8px 10px; border: 1px dashed rgba(15, 23, 42, 0.15); border-radius: 10px; background: rgba(255, 255, 255, 0.55); }
 
 /* ---------- Certificados ---------- */
 .cert-balance {

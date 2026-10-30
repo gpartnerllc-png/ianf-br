@@ -6,6 +6,7 @@ import { zapsign, zapsignEnabled, montarProtocoloEcpf, montarProtocoloEcnpj } fr
 import { serpro, serproEnabled } from '../lib/serpro.js';
 import { serasaEnabled, verificarPessoa, verificarEmpresa, normalizarVerificacao } from '../lib/serasa.js';
 import { apibrasilEnabled, saldo as apibrasilSaldo, consultarCnpj as apibrasilConsultarCnpj } from '../lib/apibrasil.js';
+import { directdataEnabled, consultar as directdataConsultar, validarEndpoint } from '../lib/directdata.js';
 import { calcularFiscal } from '../lib/fiscal.js';
 
 export async function handleStatus(env) {
@@ -19,6 +20,7 @@ export async function handleStatus(env) {
     { nome: 'Serpro PIN/IA', status: serproEnabled(env) ? 'online' : 'pendente', detalhe: serproEnabled(env) ? 'Credenciais configuradas' : 'Assinatura em loja.serpro.gov.br' },
     { nome: 'Serasa Experian (Verify PF/PJ)', status: serasaEnabled(env) ? 'online' : 'pendente', detalhe: serasaEnabled(env) ? 'Token configurado' : 'Defina SERASA_TOKEN' },
     { nome: 'APIBrasil (Dados CNPJ)', status: apibrasilEnabled(env) ? 'online' : 'pendente', detalhe: apibrasilEnabled(env) ? 'Token configurado' : 'Defina APIBRASIL_TOKEN' },
+    { nome: 'DirectData (Big Data)', status: directdataEnabled(env) ? 'online' : 'pendente', detalhe: directdataEnabled(env) ? 'Token configurado' : 'Defina DIRECTDATA_TOKEN' },
     { nome: 'PGFN Dívida Ativa (Regularize)', status: serproEnabled(env) ? 'online' : 'pendente', detalhe: serproEnabled(env) ? 'API Serpro configurada' : 'API em loja.serpro.gov.br/consulta-divida-ativa · portal Regularize disponível' },
     { nome: 'AWS Lambda Sync (Vendas)', status: 'online', detalhe: 'FINALIZAR_VENDA enviado automaticamente ao núcleo legado' },
   ];
@@ -480,4 +482,33 @@ export async function handleApibrasil(env, request) {
   }
 
   return err('Ação inválida (use saldo ou cnpj).', 400, 'ACAO_INVALIDA');
+}
+
+// ============ DIRECTDATA (CONSULTAS BIG DATA POR CONSUMO) ============
+
+export async function handleDirectdata(env, request) {
+  const auth = await requireAuth(env, request);
+  if (auth.error) return auth.error;
+  if (!directdataEnabled(env)) {
+    return json({ ok: false, code: 'DIRECTDATA_NAO_CONFIGURADO', message: 'DirectData não configurada. Pegue o token em app.directd.com.br → Configurações → Integrações e defina o secret DIRECTDATA_TOKEN.' }, 503);
+  }
+
+  const url = new URL(request.url);
+  const acao = url.searchParams.get('acao') || 'consultar';
+  const body = await readBody(request);
+
+  if (acao === 'consultar') {
+    const endpoint = String(body.endpoint || '').trim();
+    if (!validarEndpoint(endpoint)) return err('Endpoint inválido (use apenas o nome, ex: CadastroPessoaFisica).', 400, 'ENDPOINT_INVALIDO');
+    if (!(await rateLimit(env, getIp(request), 'directdata'))) return err('Limite de consultas atingido.', 429, 'RATE_LIMIT');
+    const r = await directdataConsultar(env, endpoint, body.params || {});
+    if (!r.ok) {
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'DIRECTDATA_CONSULTA_FALHA', detalhe: `${endpoint} ${r.status || r.code || ''}`, ip: getIp(request) });
+      return json(r, 502);
+    }
+    await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'DIRECTDATA_CONSULTA', detalhe: endpoint, ip: getIp(request) });
+    return ok({ endpoint, metaDados: r.metaDados, retorno: r.retorno, fonte: 'DirectData' });
+  }
+
+  return err('Ação inválida (use consultar).', 400, 'ACAO_INVALIDA');
 }
