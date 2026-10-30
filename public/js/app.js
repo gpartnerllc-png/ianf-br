@@ -25,7 +25,7 @@ async function api(path, opts = {}) {
   if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
   const res = await fetch(`${API_BASE}/api${path}`, { ...opts, headers });
   const data = await res.json().catch(() => ({ ok: false, error: { message: 'Resposta inválida' } }));
-  if (res.status === 401 && path !== '/auth/login') {
+  if (res.status === 401 && path !== '/auth/login' && data?.error?.code === 'UNAUTHORIZED') {
     sair();
     throw new Error('Sessão expirada');
   }
