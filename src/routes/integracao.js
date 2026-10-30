@@ -358,7 +358,7 @@ export async function handleSerasa(env, request) {
   const auth = await requireAuth(env, request);
   if (auth.error) return auth.error;
   if (!serasaEnabled(env)) {
-    return json({ ok: false, code: 'SERASA_NAO_CONFIGURADO', message: 'Serasa não configurada. Defina o secret SERASA_TOKEN.' }, 503);
+    return json({ ok: false, code: 'SERASA_NAO_CONFIGURADO', message: 'Serasa não configurada. Gere clientId/clientSecret no portal (client-identities) e defina os secrets SERASA_CLIENT_ID e SERASA_CLIENT_SECRET (ou SERASA_TOKEN como fallback).' }, 503);
   }
   if (!(await rateLimit(env, getIp(request), 'serasa'))) return err('Limite de consultas atingido.', 429, 'RATE_LIMIT');
 
