@@ -1147,67 +1147,71 @@ async function apibrasilSaldo() {
 // ---------- DirectData (consultas Big Data por consumo) ----------
 // Endpoints do catálogo: https://www.directd.com.br/central-de-ajuda/apis/catalogo
 const DIRECTDATA_CATALOGO = [
-  { g: 'Cadastral', n: 'Cadastro Pessoa Física', e: 'CadastroPessoaFisica', p: 'Cpf', r: 'R$ 0,16' },
-  { g: 'Cadastral', n: 'Cadastro PF Plus', e: 'CadastroPessoaFisicaPlus', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Cadastral', n: 'Cadastro Pessoa Jurídica', e: 'CadastroPessoaJuridica', p: 'Cnpj', r: 'R$ 0,16' },
-  { g: 'Cadastral', n: 'Cadastro PJ Plus', e: 'CadastroPessoaJuridicaPlus', p: 'Cnpj', r: 'R$ 0,36' },
-  { g: 'Cadastral', n: 'CNH', e: 'ConsultaCNH', p: 'Cpf', r: 'R$ 0,90' },
-  { g: 'Cadastral', n: 'CNH Plus', e: 'ConsultaCNHPlus', p: 'Cpf', r: 'R$ 1,45' },
-  { g: 'Cadastral', n: 'CNH Completa', e: 'ConsultaCNHCompleta', p: 'Cpf', r: 'R$ 4,85' },
-  { g: 'Cadastral', n: 'Óbito', e: 'ConsultaObito', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Cadastral', n: 'PIS/NIT', e: 'ConsultaPIS', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Cadastral', n: 'OAB (advogados)', e: 'ConsultaOAB', p: 'Nome', r: 'R$ 0,36' },
-  { g: 'Cadastral', n: 'Benefícios Sociais (12m)', e: 'ConsultaBeneficiosSociais', p: 'Cpf', r: 'R$ 0,75' },
-  { g: 'Cadastral', n: 'Bolsa Família', e: 'ConsultaBolsaFamilia', p: 'Nis', r: 'R$ 0,36' },
-  { g: 'Cadastral', n: 'Vínculo Empregatício', e: 'VinculoEmpregaticio', p: 'Cpf', r: 'R$ 0,36' },
+  { g: 'Cadastral', n: 'Cadastro Pessoa Física', e: 'CadastroPessoaFisica', p: 'Cpf', r: 0.16 },
+  { g: 'Cadastral', n: 'Cadastro PF Plus', e: 'CadastroPessoaFisicaPlus', p: 'Cpf', r: 0.36 },
+  { g: 'Cadastral', n: 'Cadastro Pessoa Jurídica', e: 'CadastroPessoaJuridica', p: 'Cnpj', r: 0.16 },
+  { g: 'Cadastral', n: 'Cadastro PJ Plus', e: 'CadastroPessoaJuridicaPlus', p: 'Cnpj', r: 0.36 },
+  { g: 'Cadastral', n: 'CNH', e: 'ConsultaCNH', p: 'Cpf', r: 0.90 },
+  { g: 'Cadastral', n: 'CNH Plus', e: 'ConsultaCNHPlus', p: 'Cpf', r: 1.45 },
+  { g: 'Cadastral', n: 'CNH Completa', e: 'ConsultaCNHCompleta', p: 'Cpf', r: 4.85 },
+  { g: 'Cadastral', n: 'Óbito', e: 'ConsultaObito', p: 'Cpf', r: 0.36 },
+  { g: 'Cadastral', n: 'PIS/NIT', e: 'ConsultaPIS', p: 'Cpf', r: 0.36 },
+  { g: 'Cadastral', n: 'OAB (advogados)', e: 'ConsultaOAB', p: 'Nome', r: 0.36 },
+  { g: 'Cadastral', n: 'Benefícios Sociais (12m)', e: 'ConsultaBeneficiosSociais', p: 'Cpf', r: 0.75 },
+  { g: 'Cadastral', n: 'Bolsa Família', e: 'ConsultaBolsaFamilia', p: 'Nis', r: 0.36 },
+  { g: 'Cadastral', n: 'Vínculo Empregatício', e: 'VinculoEmpregaticio', p: 'Cpf', r: 0.36 },
   { g: 'Crédito', n: 'Score', e: 'ConsultaScore', p: 'Cpf', r: '' },
-  { g: 'Crédito', n: 'SCR Bacen (analítica)', e: 'ConsultaSCRBacen', p: 'Cpf', r: 'R$ 3,90' },
-  { g: 'Crédito', n: 'Protestos', e: 'ConsultaProtestos', p: 'Cpf', r: 'R$ 2,95' },
-  { g: 'Crédito', n: 'Dossiê Direct Data', e: 'DossieDirectData', p: 'Cnpj', r: 'R$ 2,40' },
-  { g: 'Crédito', n: 'Antifraude Chave PIX', e: 'ConsultaPix', p: 'ChavePix', r: 'R$ 1,55' },
-  { g: 'Fiscal e Tributário', n: 'Certidão Conjunta de Débitos', e: 'CertidaoConjuntaDebitos', p: 'Cnpj', r: 'R$ 0,36' },
-  { g: 'Fiscal e Tributário', n: 'Certidão Negativa de Débitos', e: 'CertidaoNegativaDebitos', p: 'Cnpj', r: 'R$ 0,36' },
-  { g: 'Fiscal e Tributário', n: 'NF-e Completa', e: 'ConsultaNFE', p: 'Chave', r: 'R$ 1,30' },
-  { g: 'Fiscal e Tributário', n: 'Simples Nacional', e: 'ConsultaSimplesNacional', p: 'Cnpj', r: 'R$ 0,36' },
-  { g: 'Processos', n: 'Processos Judiciais', e: 'ConsultaProcessosJudiciais', p: 'Cpf', r: 'R$ 1,10' },
-  { g: 'Ambiental', n: 'IBAMA CND', e: 'IbamaCertidaoNegativaDebitos', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Ambiental', n: 'IBAMA Embargo', e: 'IbamaCertidaoEmbargo', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Ambiental', n: 'IBAMA Autuações', e: 'IbamaAutuacoes', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'CEIS', e: 'CadastroEmpresasInidoneasSuspensas', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'CEPIM', e: 'CadastroEntidadesPrivadasImpedidas', p: 'Cnpj', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'CNEP', e: 'CadastroNacionalEmpresasPunidas', p: 'Cnpj', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'CNIA (improbidade)', e: 'CadastroNacionalImprobidadeAdministrativa', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'CNJ Mandados de Prisão', e: 'CNJMandadosPrisao', p: 'Cpf', r: 'R$ 0,72' },
-  { g: 'Sanções e Restrições', n: 'PEP', e: 'PessoaExpostaPoliticamente', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'PEP Estendida', e: 'PEPParentescos', p: 'Cpf', r: 'R$ 0,72' },
-  { g: 'Sanções e Restrições', n: 'PGFN Devedores da União', e: 'PGFNListaDevedoresUniao', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'Polícia Civil Antecedentes', e: 'PoliciaCivilAntecedentesCriminais', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'Polícia Federal Antecedentes', e: 'PoliciaFederalAntecedentesCriminais', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'TCU Licitante Inidôneo', e: 'TCUCertidaoNegativaLicitanteInidoneo', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'TCU Consolidada PJ', e: 'TCUConsultaConsolidadaPessoaJuridica', p: 'Cnpj', r: 'R$ 0,72' },
-  { g: 'Sanções e Restrições', n: 'TJ Certidão Cível/Criminal/Fiscal', e: 'TJCertidaoCivelCriminalFiscal', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'TRF Certidão', e: 'TribunalRegionalFederal', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'Trabalho Forçado', e: 'VerificacaoEmpregadorTrabalhoForcado', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'BACEN Inabilitados', e: 'BancoCentralInabilitados', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções e Restrições', n: 'BACEN Proibidos', e: 'BancoCentralProibidos', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Societário', n: 'Beneficiário Final (UBO)', e: 'ConsultaBeneficiarioFinal', p: 'Cnpj', r: 'R$ 1,44' },
-  { g: 'Societário', n: 'Vínculos Societários', e: 'VinculosSocietarios', p: 'Cpf', r: 'R$ 1,84' },
-  { g: 'Societário', n: 'AML', e: 'ConsultaAML', p: 'Cpf', r: 'R$ 0,72' },
-  { g: 'Trabalhista', n: 'MPT', e: 'ConsultaMPT', p: 'Cnpj', r: 'R$ 1,30' },
-  { g: 'Trabalhista', n: 'CNDT (débitos trabalhistas)', e: 'CertidaoDebitosTrabalhistas', p: 'Cnpj', r: 'R$ 0,36' },
-  { g: 'Regularidade', n: 'FGTS (CRF)', e: 'CertidaoRegularidadeFGTS', p: 'Cnpj', r: 'R$ 0,36' },
-  { g: 'Regularidade', n: 'TSE', e: 'ConsultaTSE', p: 'Cpf', r: 'R$ 0,36' },
-  { g: 'Sanções Internacionais', n: 'OFAC', e: 'OFAC', p: 'Nome', r: 'R$ 0,36' },
-  { g: 'Sanções Internacionais', n: 'INTERPOL', e: 'Interpol', p: 'Nome', r: 'R$ 0,36' },
-  { g: 'Veicular', n: 'Consulta Veicular Nacional', e: 'ConsultaVeicular', p: 'Placa', r: 'R$ 1,10' },
-  { g: 'Veicular', n: 'Histórico de Proprietários', e: 'ConsultaVeicularHistorico', p: 'Placa', r: 'R$ 4,10' },
-  { g: 'Veicular', n: 'FIPE', e: 'ConsultaVeicularFipe', p: 'Placa', r: 'R$ 3,98' },
-  { g: 'Veicular', n: 'RENAINF (multas)', e: 'Renainf', p: 'Placa', r: 'R$ 2,10' },
-  { g: 'Veicular', n: 'RENAJUD (restrições)', e: 'Renajud', p: 'Placa', r: 'R$ 1,90' },
-  { g: 'Veicular', n: 'Roubo e Furto', e: 'ConsultaRouboFurto', p: 'Placa', r: 'R$ 1,45' },
-  { g: 'Veicular', n: 'Recall', e: 'RecallVeicular', p: 'Placa', r: 'R$ 1,20' },
+  { g: 'Crédito', n: 'SCR Bacen (analítica)', e: 'ConsultaSCRBacen', p: 'Cpf', r: 3.90 },
+  { g: 'Crédito', n: 'Protestos', e: 'ConsultaProtestos', p: 'Cpf', r: 2.95 },
+  { g: 'Crédito', n: 'Dossiê Direct Data', e: 'DossieDirectData', p: 'Cnpj', r: 2.40 },
+  { g: 'Crédito', n: 'Antifraude Chave PIX', e: 'ConsultaPix', p: 'ChavePix', r: 1.55 },
+  { g: 'Fiscal e Tributário', n: 'Certidão Conjunta de Débitos', e: 'CertidaoConjuntaDebitos', p: 'Cnpj', r: 0.36 },
+  { g: 'Fiscal e Tributário', n: 'Certidão Negativa de Débitos', e: 'CertidaoNegativaDebitos', p: 'Cnpj', r: 0.36 },
+  { g: 'Fiscal e Tributário', n: 'NF-e Completa', e: 'ConsultaNFE', p: 'Chave', r: 1.30 },
+  { g: 'Fiscal e Tributário', n: 'Simples Nacional', e: 'ConsultaSimplesNacional', p: 'Cnpj', r: 0.36 },
+  { g: 'Processos', n: 'Processos Judiciais', e: 'ConsultaProcessosJudiciais', p: 'Cpf', r: 1.10 },
+  { g: 'Ambiental', n: 'IBAMA CND', e: 'IbamaCertidaoNegativaDebitos', p: 'Cpf', r: 0.36 },
+  { g: 'Ambiental', n: 'IBAMA Embargo', e: 'IbamaCertidaoEmbargo', p: 'Cpf', r: 0.36 },
+  { g: 'Ambiental', n: 'IBAMA Autuações', e: 'IbamaAutuacoes', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'CEIS', e: 'CadastroEmpresasInidoneasSuspensas', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'CEPIM', e: 'CadastroEntidadesPrivadasImpedidas', p: 'Cnpj', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'CNEP', e: 'CadastroNacionalEmpresasPunidas', p: 'Cnpj', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'CNIA (improbidade)', e: 'CadastroNacionalImprobidadeAdministrativa', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'CNJ Mandados de Prisão', e: 'CNJMandadosPrisao', p: 'Cpf', r: 0.72 },
+  { g: 'Sanções e Restrições', n: 'PEP', e: 'PessoaExpostaPoliticamente', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'PEP Estendida', e: 'PEPParentescos', p: 'Cpf', r: 0.72 },
+  { g: 'Sanções e Restrições', n: 'PGFN Devedores da União', e: 'PGFNListaDevedoresUniao', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'Polícia Civil Antecedentes', e: 'PoliciaCivilAntecedentesCriminais', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'Polícia Federal Antecedentes', e: 'PoliciaFederalAntecedentesCriminais', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'TCU Licitante Inidôneo', e: 'TCUCertidaoNegativaLicitanteInidoneo', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'TCU Consolidada PJ', e: 'TCUConsultaConsolidadaPessoaJuridica', p: 'Cnpj', r: 0.72 },
+  { g: 'Sanções e Restrições', n: 'TJ Certidão Cível/Criminal/Fiscal', e: 'TJCertidaoCivelCriminalFiscal', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'TRF Certidão', e: 'TribunalRegionalFederal', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'Trabalho Forçado', e: 'VerificacaoEmpregadorTrabalhoForcado', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'BACEN Inabilitados', e: 'BancoCentralInabilitados', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções e Restrições', n: 'BACEN Proibidos', e: 'BancoCentralProibidos', p: 'Cpf', r: 0.36 },
+  { g: 'Societário', n: 'Beneficiário Final (UBO)', e: 'ConsultaBeneficiarioFinal', p: 'Cnpj', r: 1.44 },
+  { g: 'Societário', n: 'Vínculos Societários', e: 'VinculosSocietarios', p: 'Cpf', r: 1.84 },
+  { g: 'Societário', n: 'AML', e: 'ConsultaAML', p: 'Cpf', r: 0.72 },
+  { g: 'Trabalhista', n: 'MPT', e: 'ConsultaMPT', p: 'Cnpj', r: 1.30 },
+  { g: 'Trabalhista', n: 'CNDT (débitos trabalhistas)', e: 'CertidaoDebitosTrabalhistas', p: 'Cnpj', r: 0.36 },
+  { g: 'Regularidade', n: 'FGTS (CRF)', e: 'CertidaoRegularidadeFGTS', p: 'Cnpj', r: 0.36 },
+  { g: 'Regularidade', n: 'TSE', e: 'ConsultaTSE', p: 'Cpf', r: 0.36 },
+  { g: 'Sanções Internacionais', n: 'OFAC', e: 'OFAC', p: 'Nome', r: 0.36 },
+  { g: 'Sanções Internacionais', n: 'INTERPOL', e: 'Interpol', p: 'Nome', r: 0.36 },
+  { g: 'Veicular', n: 'Consulta Veicular Nacional', e: 'ConsultaVeicular', p: 'Placa', r: 1.10 },
+  { g: 'Veicular', n: 'Histórico de Proprietários', e: 'ConsultaVeicularHistorico', p: 'Placa', r: 4.10 },
+  { g: 'Veicular', n: 'FIPE', e: 'ConsultaVeicularFipe', p: 'Placa', r: 3.98 },
+  { g: 'Veicular', n: 'RENAINF (multas)', e: 'Renainf', p: 'Placa', r: 2.10 },
+  { g: 'Veicular', n: 'RENAJUD (restrições)', e: 'Renajud', p: 'Placa', r: 1.90 },
+  { g: 'Veicular', n: 'Roubo e Furto', e: 'ConsultaRouboFurto', p: 'Placa', r: 1.45 },
+  { g: 'Veicular', n: 'Recall', e: 'RecallVeicular', p: 'Placa', r: 1.20 },
   { g: 'Outros', n: 'Endpoint personalizado...', e: '__custom', p: '', r: '' },
 ];
+
+// Preços exibidos com margem de 10% do usuário sobre a tarifa da DirectData
+const DD_MARKUP = 1.1;
+function ddPreco(v) { return 'R$ ' + (v * DD_MARKUP).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 function ddInit() {
   const sel = $('ddEndpoint');
@@ -1215,7 +1219,7 @@ function ddInit() {
   const grupos = {};
   DIRECTDATA_CATALOGO.forEach((c) => { (grupos[c.g] ||= []).push(c); });
   sel.innerHTML = Object.entries(grupos)
-    .map(([g, itens]) => `<optgroup label="${g}">${itens.map((c) => `<option value="${c.e}">${c.n}${c.r ? ` · ${c.r}` : ''}</option>`).join('')}</optgroup>`)
+    .map(([g, itens]) => `<optgroup label="${g}">${itens.map((c) => `<option value="${c.e}">${c.n}${c.r ? ` · ${ddPreco(c.r)}` : ''}</option>`).join('')}</optgroup>`)
     .join('');
   ddEndpointChange();
 }
@@ -1284,7 +1288,10 @@ async function consultarDirectdata() {
       ${ddBloque(data.retorno)}
       <p class="mt-3 small"><a class="link" href="https://www.directd.com.br/central-de-ajuda/apis/catalogo" target="_blank" rel="noopener">Catálogo DirectData ↗</a></p>`;
   } catch (erro) {
-    el.innerHTML = `<p class="form-error">${erro.message}</p>`;
+    const recarga = erro.code === 'SALDO_INSUFICIENTE'
+      ? `<p class="mt-3"><a class="link" href="https://app.directd.com.br" target="_blank" rel="noopener">Adicionar saldo DirectData ↗</a></p>`
+      : '';
+    el.innerHTML = `<p class="form-error">${erro.message}</p>${recarga}`;
   }
 }
 
