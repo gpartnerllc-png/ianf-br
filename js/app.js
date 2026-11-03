@@ -1334,11 +1334,12 @@ const SERPRO_SERVICOS = {
   cpf: { main: true, ph: '000.000.000-00', extras: [['nasc', 'input', 'Nascimento dd/mm/aaaa (obrigatório na CPF v3)']] },
   'situacao-cpf': { main: true, ph: '000.000.000-00', extras: [['nasc', 'input', 'Nascimento dd/mm/aaaa (obrigatório na CPF v3)']] },
   nfe: { main: true, ph: 'Chave de acesso da NF-e (44 dígitos)' },
+  'nfe-escalonada': { main: true, ph: 'Chave de acesso da NF-e (44 dígitos) — processamento em lote' },
+  'nfe-push': { main: false, extras: [['tipo', 'select', [['status', 'Status da API NF-e'], ['clientes', 'Clientes com push configurado'], ['listar', 'Listar monitoramentos'], ['criar', 'Criar monitoramento (chaves abaixo)'], ['excluir', 'Excluir monitoramento (id abaixo)']]], ['chaves', 'textarea', 'Chaves de acesso (uma por linha, 1 a 500)'], ['id', 'input', 'ID do monitoramento (excluir)']] },
   cnd: { main: true, ph: 'CPF ou CNPJ do contribuinte', extras: [['tipo', 'select', [['2', 'Pessoa Jurídica'], ['1', 'Pessoa Física'], ['3', 'NIRF']]], ['pdf', 'check', 'Gerar certidão em PDF']] },
   'divida-ativa': { main: true, ph: 'CPF ou CNPJ' },
   'divida-inscricao': { main: true, ph: 'Número da inscrição (ex.: 9061700096419)' },
-  faturamento: { main: false, extras: [['token', 'input', 'Token de autorização (e-CAC → Compartilha)'], ['contratante', 'input', 'CNPJ do contratante (14 dígitos)']] },
-  'faturamento-autorizacoes': { main: false, extras: [['contratante', 'input', 'CNPJ do contratante (14 dígitos)'], ['titular', 'input', 'CPF do titular dos dados (11 dígitos)']] },
+  faturamento: { main: false, extras: [['tipo', 'select', [['consultar', 'Consultar (token + contratante)'], ['autorizacoes', 'Autorizações (contratante/titular)']]], ['token', 'input', 'Token de autorização (e-CAC → Compartilha)'], ['contratante', 'input', 'CNPJ do contratante (14 dígitos)'], ['titular', 'input', 'CPF do titular dos dados (11 dígitos)']] },
   due: { main: false, extras: [['numero', 'input', 'Número da DUE (ex.: 18BR0000133506)'], ['chave', 'input', 'Chave de acesso da DUE (ex.: 18ERM135006)']] },
   comex: { main: true, ph: 'Nº contêiner (ex.: MOLU...), NIC ou CNPJ', extras: [['servico', 'select', [['container', 'Situação de contêiner'], ['presenca', 'Presença de carga (NIC no campo + recinto abaixo)'], ['habitacao', 'Habilitação (CNPJ)']]], ['recinto', 'input', 'Recinto (obrigatório p/ presença de carga)'], ['jwt', 'input', 'JWT token SAPI (opcional)']] },
   compras: { main: true, ph: 'Chave da compra', extras: [['tipo', 'select', [['chat', 'Chat de mensagens'], ['diligencias', 'Diligências']]]] },
@@ -1346,14 +1347,180 @@ const SERPRO_SERVICOS = {
   carimbo: { main: false, extras: [['base64', 'textarea', 'Timestamp em base64 (header x-signature)'], ['document', 'textarea', 'Documento original (JSON) — opcional']] },
   ia: { main: false, extras: [['prompt', 'textarea', 'Ex.: analise o CNPJ 27.865.757/0001-02 e aponte riscos fiscais']] },
   cartorio: { main: true, ph: 'CPF ou CNPJ', extras: [['modo', 'select', [['cpf', 'CPF (pessoa física)'], ['basica', 'CNPJ — Básica'], ['qsa', 'CNPJ — Quadro Societário'], ['empresa', 'CNPJ — Empresa']]]] },
+  ccir: { main: false, extras: [['tipo', 'select', [['ni', 'Códigos de imóveis por CPF/CNPJ'], ['codigo', 'Dados do CCIR pelo código do imóvel'], ['emitir', 'Emitir CCIR pelo código'], ['status', 'Status do serviço']]], ['ni', 'input', 'CPF ou CNPJ do titular do imóvel'], ['codigo', 'input', 'Código do imóvel INCRA (11 dígitos)']] },
   renda: { main: false, extras: [['tipo', 'select', [['consultar', 'Consultar (token)'], ['autorizacoes', 'Autorizações (contratante/titular)'], ['status', 'Status do serviço']]], ['token', 'input', 'Token de autorização (e-CAC → Compartilha)'], ['contratante', 'input', 'CNPJ do contratante (14 dígitos)'], ['titular', 'input', 'CPF do titular dos dados (11 dígitos)']] },
   restituicao: { main: false, extras: [['tipo', 'select', [['consultar', 'Consultar (token)'], ['autorizacoes', 'Autorizações (contratante/titular)'], ['status', 'Status do serviço']]], ['token', 'input', 'Token de autorização (e-CAC → Compartilha)'], ['contratante', 'input', 'CNPJ do contratante (14 dígitos)'], ['titular', 'input', 'CPF do titular dos dados (11 dígitos)']] },
   datavalid: { main: true, ph: '000.000.000-00', extras: [['nome', 'input', 'Nome completo (opcional — valida o nome)'], ['nasc', 'input', 'Nascimento dd/mm/aaaa (opcional — valida a data)'], ['rfb', 'check', 'Comparar com a base da Receita Federal (RFB)'], ['senatran', 'check', 'Comparar com a base da Senatran (CNH)']] },
   'datavalid-status': { main: false },
   biovalid: { main: true, ph: '000.000.000-00', extras: [['servico', 'select', [['token', 'Gerar token (biometria)'], ['liveness', 'Prova de vida (selfie)']]], ['expira', 'input', 'Validade do token em minutos (opcional)'], ['tentativas', 'input', 'Qtd de tentativas (opcional)'], ['pin', 'input', 'PIN retornado no token (obrigatório p/ liveness)'], ['device', 'input', 'Identificador do dispositivo (obrigatório p/ liveness)'], ['sexo', 'input', 'Sexo: M ou F (liveness)'], ['selfie', 'textarea', 'Selfie em base64 (liveness)']] },
-  antecipa: { main: true, ph: 'CPF ou CNPJ do fornecedor', extras: [['tipo', 'select', [['avaliacao', 'Avaliação do fornecedor'], ['contratos', 'Execuções de contratos'], ['ordembancaria', 'Ordem bancária'], ['cotacoes', 'Cotações disponíveis'], ['proposta', 'Proposta de cotação']]], ['id', 'input', 'ID do contrato / ordem bancária / cotação']] },
-  'nfe-push': { main: false, extras: [['tipo', 'select', [['status', 'Status da API NF-e'], ['listar', 'Listar monitoramentos'], ['criar', 'Criar monitoramento (chaves abaixo)'], ['excluir', 'Excluir monitoramento (id abaixo)']]], ['chaves', 'textarea', 'Chaves de acesso (uma por linha, 1 a 500)'], ['id', 'input', 'ID do monitoramento (excluir)']] },
+  antecipa: { main: false, extras: [['tipo', 'select', [['cotacoes', 'Cotações disponíveis'], ['proposta', 'Proposta (ID da cotação)'], ['contrato', 'Contrato (cotação + UASG + nº)'], ['dadosbasicos', 'Dados básicos do fornecedor'], ['situacaonivel', 'Situação/nível do fornecedor'], ['regularidade', 'Regularidade fiscal-financeira'], ['ocorrencias', 'Ocorrências do fornecedor'], ['historico', 'Histórico do fornecedor'], ['arquivo', 'Arquivo (código)']]], ['id', 'input', 'ID (cotação / arquivo)'], ['ni', 'input', 'CPF ou CNPJ do fornecedor'], ['uasg', 'input', 'UASG'], ['contrato', 'input', 'Nº do contrato'], ['nivel', 'select', [['detalhada', 'Ocorrências detalhadas'], ['nadaconsta', 'Nada consta'], ['impeditivasindiretas', 'Impeditivas indiretas']]]] },
+  pilar: { main: false, extras: [['tipo', 'select', [['avaliacao', 'Avaliação do fornecedor'], ['contratos', 'Execuções de contrato'], ['ordembancaria', 'Ordem bancária'], ['operacoes', 'Operações de crédito (lista)'], ['operacao', 'Operação de crédito (ID)'], ['cotacao', 'Cotação (UASG + contrato)'], ['documento', 'Documento da cotação'], ['cronograma', 'Cronograma do contrato'], ['empenhos', 'Empenhos do contrato'], ['faturas', 'Faturas do contrato'], ['historico', 'Histórico do contrato'], ['itens', 'Itens do contrato'], ['empenho', 'Empenho (nº)']]], ['ni', 'input', 'CPF ou CNPJ do fornecedor'], ['id', 'input', 'ID (cotação / contrato / ordem / operação)'], ['uasg', 'input', 'UASG'], ['contrato', 'input', 'Nº do contrato / empenho']] },
 };
+
+// Cabeçalho padrão dos resultados Serpro: título + selo do ambiente + fonte
+function serproCabecalho(titulo, data) {
+  const badge = (data.ambiente === 'demo' || data.ambiente === 'trial')
+    ? '<span class="tag tag-rascunho">demonstração</span>'
+    : data.ambiente === 'prod' ? '<span class="tag tag-autorizada">oficial</span>' : '';
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h4>${ddEsc(titulo)} ${badge}</h4></div><p class="muted small">${ddEsc(data.fonte || '')}</p>`;
+}
+
+function serproDetalhes(data) {
+  const d = data.detalhes ?? data.dados ?? data;
+  return `<details class="mt-3"><summary class="small muted">Retorno completo (JSON oficial)</summary>${ddBloque(d)}</details>`;
+}
+
+function serproKv(rotulo, valor) {
+  if (valor === null || valor === undefined || valor === '') return '';
+  return `<div class="kv"><span>${ddEsc(rotulo)}</span><b>${ddEsc(String(valor))}</b></div>`;
+}
+
+function fmtDataBr(iso) {
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso);
+}
+
+// Cartão detalhado de CNPJ (CNPJ-BASICO/QSA/EMPRESA — schema oficial Serpro v2)
+function serproRenderCnpj(s, data, tituloAlt) {
+  s = s || {};
+  const socios = (s.socios || []).map((x) => `<div class="dd-sub"><p><b>${ddEsc(x.nome || '—')}</b>${x.qualificacao ? ` · ${ddEsc(x.qualificacao)}` : ''}${x.faixa_etaria ? ` · ${ddEsc(x.faixa_etaria)}` : ''}</p></div>`).join('');
+  return `
+    ${serproCabecalho(tituloAlt || s.razao_social || 'CNPJ', data)}
+    ${serproKv('CNPJ', s.cnpj)}
+    ${serproKv('Tipo de estabelecimento', s.tipo_estabelecimento)}
+    ${serproKv('Nome empresarial', s.razao_social)}
+    ${serproKv('Fantasia', s.nome_fantasia)}
+    ${serproKv('Situação cadastral', [s.situacao_cadastral, fmtDataBr(s.situacao_data), s.situacao_motivo && `motivo ${s.situacao_motivo}`].filter(Boolean).join(' · '))}
+    ${serproKv('Natureza jurídica', s.natureza_juridica)}
+    ${serproKv('Data de abertura', fmtDataBr(s.data_abertura))}
+    ${serproKv('Porte', s.porte)}
+    ${serproKv('CNAE principal', s.cnae_principal)}
+    ${(s.cnae_secundarias || []).length ? serproKv(`CNAE secundários (${s.cnae_secundarias.length})`, s.cnae_secundarias.slice(0, 8).join(' | ') + (s.cnae_secundarias.length > 8 ? ' …' : '')) : ''}
+    ${serproKv('Endereço', [s.endereco, s.bairro && `${s.bairro}`, s.municipio && `${s.municipio}/${s.uf}`, s.cep && `CEP ${s.cep}`, s.pais].filter(Boolean).join(', '))}
+    ${serproKv('Município da jurisdição', s.municipio_jurisdicao)}
+    ${(s.telefones || []).length ? serproKv('Telefones', s.telefones.join(' · ')) : ''}
+    ${serproKv('E-mail', s.email)}
+    ${s.capital_social !== '' && s.capital_social != null ? `<div class="kv"><span>Capital social</span><b>${fmt(Number(String(s.capital_social).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.')) || 0)}</b></div>` : ''}
+    ${serproKv('Situação especial', s.situacao_especial ? `${s.situacao_especial}${s.data_situacao_especial ? ' (' + fmtDataBr(s.data_situacao_especial) + ')' : ''}` : '')}
+    ${socios ? `<p class="mt-3 small"><b>Quadro societário (${s.socios.length}):</b></p>${socios}` : ''}
+    ${serproDetalhes(data)}`;
+}
+
+function serproRenderCpf(s, data) {
+  s = s || {};
+  return `
+    ${serproCabecalho(s.nome || 'CPF', data)}
+    ${serproKv('CPF', s.cpf)}
+    ${serproKv('Nome', s.nome)}
+    ${serproKv('Nome social', s.nome_social)}
+    ${serproKv('Situação cadastral', s.situacao)}
+    ${serproKv('Nascimento', fmtDataBr(s.nascimento) || s.nascimento)}
+    ${serproKv('Data de inscrição', fmtDataBr(s.data_inscricao) || s.data_inscricao)}
+    ${serproDetalhes(data)}`;
+}
+
+// Cartão detalhado de NF-e (protNFe + infNFe — resposta real da Consulta NF-e)
+function serproRenderNfe(s, data) {
+  s = s || {};
+  const v = s.valores || {};
+  const itens = (s.itens || []).slice(0, 20).map((i) => `<div class="dd-sub"><p class="small"><b>${ddEsc(String(i.item || ''))} · ${ddEsc(i.descricao || '')}</b><br>${ddEsc([i.codigo && `cód ${i.codigo}`, i.ncm && `NCM ${i.ncm}`, i.cfop && `CFOP ${i.cfop}`, i.quantidade && `${i.quantidade} ${i.unidade || ''}`, i.valor && fmt(i.valor)].filter(Boolean).join(' · '))}</p></div>`).join('');
+  const pags = (s.pagamentos || []).filter((p) => p.forma || p.valor).map((p) => `${ddEsc(p.forma || '')}${p.valor ? ` ${fmt(p.valor)}` : ''}`).join(' · ');
+  return `
+    ${serproCabecalho(`NF-e nº ${s.numero || '—'} (série ${ddEsc(String(s.serie || '—'))})`, data)}
+    ${serproKv('Chave de acesso', s.chave)}
+    ${serproKv('Situação', [s.situacao_processamento, s.numero_protocolo && `protocolo ${s.numero_protocolo}`].filter(Boolean).join(' · '))}
+    ${serproKv('Ambiente', s.ambiente)}
+    ${serproKv('Modelo/Série/Número', [s.modelo, s.serie, s.numero].filter(Boolean).join(' / '))}
+    ${serproKv('Natureza da operação', s.natureza_operacao)}
+    ${serproKv('Tipo', s.tipo)}
+    ${serproKv('Finalidade', s.finalidade)}
+    ${serproKv('Data de emissão', s.data_emissao)}
+    ${serproKv('Data de recebimento', s.data_recebimento)}
+    ${s.emissor ? serproKv('Emissor', [s.emissor.documento, s.emissor.nome, s.emissor.fantasia].filter(Boolean).join(' · ')) : ''}
+    ${s.emissor && s.emissor.endereco ? serproKv('Endereço do emissor', s.emissor.endereco) : ''}
+    ${s.destinatario ? serproKv('Destinatário', [s.destinatario.documento, s.destinatario.nome].filter(Boolean).join(' · ')) : ''}
+    ${s.destinatario && s.destinatario.endereco ? serproKv('Endereço do destinatário', s.destinatario.endereco) : ''}
+    ${`<div class="kv"><span>Valor dos produtos</span><b>${fmt(v.produtos || 0)}</b></div>`}
+    ${`<div class="kv"><span>ICMS / ST / IPI</span><b>${fmt(v.icms || 0)} / ${fmt(v.icms_st || 0)} / ${fmt(v.ipi || 0)}</b></div>`}
+    ${`<div class="kv"><span>PIS / COFINS</span><b>${fmt(v.pis || 0)} / ${fmt(v.cofins || 0)}</b></div>`}
+    ${(v.frete || v.seguro || v.desconto) ? `<div class="kv"><span>Frete / Seguro / Desconto</span><b>${fmt(v.frete || 0)} / ${fmt(v.seguro || 0)} / ${fmt(v.desconto || 0)}</b></div>` : ''}
+    ${`<div class="kv"><span>Total da nota</span><b>${fmt(v.total_nota || v.produtos || 0)}</b></div>`}
+    ${pags ? serproKv('Pagamentos', pags) : ''}
+    ${(s.volumes || []).length ? serproKv('Volumes', s.volumes.map((x) => [x.especie, x.marca || x.marcas, x.peso_liquido && `PL ${x.peso_liquido}`].filter(Boolean).join(' ')).join(' | ')) : ''}
+    ${s.informacoes_adicionais ? serproKv('Informações complementares', String(s.informacoes_adicionais).slice(0, 400)) : ''}
+    ${(s.itens || []).length ? `<p class="mt-3 small"><b>Itens (${s.itens.length}):</b></p>${itens}` : ''}
+    ${serproDetalhes(data)}`;
+}
+
+// Renderizador dos serviços Compartilha RFB (renda / restituição / faturamento)
+function serproRenderCompartilha(s) {
+  s = s || {};
+  if (Array.isArray(s.autorizacoes)) {
+    if (!s.autorizacoes.length) return '<p class="muted small">Nenhuma autorização retornada.</p>';
+    return s.autorizacoes.map((a) => `
+      <div class="dd-sub">
+        <p><b>${ddEsc(a.ni || a.token || 'Autorização')}</b> · ${ddEsc(a.status || '')}</p>
+        ${serproKv('Token', a.token)}
+        ${serproKv('Vigência', [a.vigenciaInicial, a.vigenciaFinal].filter(Boolean).join(' → '))}
+        ${serproKv('Serviço', [a.idServico, a.versao].filter(Boolean).join(' v'))}
+        ${serproKv('Hash ICP-Brasil', a.hashStatus)}
+      </div>`).join('') + (s.errorResponse ? serproKv('Erro', s.errorResponse) : '');
+  }
+  if (s.status) return serproKv('Status', typeof s.status === 'object' ? JSON.stringify(s.status) : s.status);
+  const a = s.autorizacao;
+  let out = '';
+  if (a) out += serproKv('Titular', a.titular) + serproKv('Destinatário', a.destinatario) + serproKv('Registro da autorização', a.dataHoraRegistro);
+  out += serproKv('Serviço', [s.servico, s.idServico, s.versao && `v${s.versao}`].filter(Boolean).join(' · '));
+  out += (s.dados || []).map((x) => `
+    <div class="dd-sub"><p class="small"><b>${ddEsc([x.codigo, x.texto].filter(Boolean).join(' · ') || 'Dado')}</b>${x.valorTexto ? `<br>${ddEsc(String(x.valorTexto).slice(0, 300))}` : ''}</p></div>`).join('');
+  Object.entries(s.blocos || {}).forEach(([nome, dados]) => {
+    out += `<p class="mt-3 small"><b>${ddEsc(nome.replace(/^dados/, '').replace(/([a-z])([A-Z])/g, '$1 $2'))}:</b></p>`;
+    out += dados.map((x) => `<div class="kv"><span>${ddEsc([x.codigo, x.texto].filter(Boolean).join(' · '))}</span><b>${ddEsc(String(x.valorTexto || x.valor || '').slice(0, 120))}</b></div>`).join('');
+  });
+  if (s.mensagem) out += serproKv('Mensagem', s.mensagem);
+  return out || ddBloque(s);
+}
+
+// Cartão detalhado de CCIR (INCRA)
+function serproRenderCcir(s) {
+  s = s || {};
+  const titulares = (s.titulares || []).map((t) => `<div class="dd-sub"><p class="small"><b>${ddEsc(t.nome || '—')}</b> · ${ddEsc(t.documento || '')}${t.condicao ? ` · ${ddEsc(t.condicao)}` : ''}${t.percentual ? ` · ${ddEsc(t.percentual)}%` : ''}</p></div>`).join('');
+  const areas = (s.areas_registradas || []).map((a) => `<div class="dd-sub"><p class="small">${ddEsc([a.area && `Área ${a.area}`, a.registro, a.cns_oficio && `CNS ${a.cns_oficio}`, a.municipio_cartorio && `${a.municipio_cartorio}/${a.uf_cartorio}`, a.data_registro].filter(Boolean).join(' · '))}</p></div>`).join('');
+  return `
+    ${serproKv('Código do imóvel (INCRA)', s.codigo_imovel)}
+    ${serproKv('Denominação', s.denominacao)}
+    ${serproKv('Área total', s.area_total)}
+    ${serproKv('Área registrada / certificada', [s.area_registrada, s.area_certificada].filter(Boolean).join(' / '))}
+    ${serproKv('Módulos fiscal / rural', [s.area_modulo_fiscal, s.area_modulo_rural].filter(Boolean).join(' / '))}
+    ${serproKv('Nº de módulos fiscais', s.numero_modulos_fiscais)}
+    ${serproKv('Classificação fundiária', s.classificacao_fundiaria)}
+    ${serproKv('Sede', [s.municipio_sede, s.uf_sede].filter(Boolean).join('/'))}
+    ${s.situacao_ccir ? serproKv('Situação do CCIR', [s.situacao_ccir, s.numero_ccir && `nº ${s.numero_ccir}`].filter(Boolean).join(' · ')) : ''}
+    ${s.data_geracao ? serproKv('Geração / vencimento', [s.data_geracao, s.data_vencimento && `vence ${fmtDataBr(s.data_vencimento)}`].filter(Boolean).join(' · ')) : ''}
+    ${s.valor_total || s.valor_cobrado ? `<div class="kv"><span>Valor total / cobrado</span><b>${fmt(s.valor_total || 0)} / ${fmt(s.valor_cobrado || 0)}</b></div>` : ''}
+    ${s.juros || s.multa ? `<div class="kv"><span>Juros / Multa</span><b>${fmt(s.juros || 0)} / ${fmt(s.multa || 0)}</b></div>` : ''}
+    ${s.autenticidade ? serproKv('Autenticidade', s.autenticidade) : ''}
+    ${titulares ? `<p class="mt-3 small"><b>Titulares (${(s.titulares || []).length}):</b></p>${titulares}` : ''}
+    ${areas ? `<p class="mt-3 small"><b>Áreas registradas (${(s.areas_registradas || []).length}):</b></p>${areas}` : ''}`;
+}
+
+function baixarPdfBase64(b64, nome) {
+  try {
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = nome || 'documento.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch { alert('Não foi possível abrir o PDF.'); }
+}
+
+function baixarCndPdf() {
+  if (window.__serproCndPdf) baixarPdfBase64(window.__serproCndPdf, 'cnd-serpro.pdf');
+}
 
 function serproExtra(id) {
   return document.getElementById(`serproE_${id}`);
@@ -1418,31 +1585,39 @@ async function consultarSerpro() {
         return;
       }
       const data = await api(`/integracao/serpro?acao=due&numero=${encodeURIComponent(numero)}&chave=${encodeURIComponent(chave)}`);
-      el.innerHTML = `<h4>DUE ${ddEsc(numero)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.due)}`;
+      const s = data.resumo || {};
+      el.innerHTML = `
+        ${serproCabecalho(`DUE ${numero}`, data)}
+        ${serproKv('Situação', s.situacao)}
+        ${serproKv('Canal', s.canal)}
+        ${serproKv('Situação da carga', s.situacaoDaCarga)}
+        ${serproKv('Bloqueada p/ embarque', s.bloqueadaParaEmbarque)}
+        ${serproKv('Exigência', s.exigencia)}
+        ${serproKv('Declarante', s.declarante)}
+        ${serproKv('Forma de exportação', s.formaExportacao)}
+        ${serproKv('País do importador', s.paisImportador)}
+        ${serproKv('Peso líquido total', s.pesoLiquidoTotal)}
+        ${s.valorMercadorias ? `<div class="kv"><span>Valor das mercadorias</span><b>${fmt(s.valorMercadorias)} (${ddEsc(String(s.moeda || ''))})</b></div>` : ''}
+        ${serproKv('Itens / Eventos', `${s.totalItens || 0} itens · ${s.totalEventos || 0} eventos`)}
+        ${serproDetalhes(data)}`;
       return;
     }
 
     if (svc === 'faturamento') {
+      const tipo = serproExtra('tipo')?.value || 'consultar';
       const token = (serproExtra('token')?.value || '').trim();
       const contratante = (serproExtra('contratante')?.value || '').replace(/\D/g, '');
-      if (!token || contratante.length !== 14) {
+      const titular = (serproExtra('titular')?.value || '').replace(/\D/g, '');
+      if (tipo === 'consultar' && (!token || contratante.length !== 14)) {
         el.innerHTML = '<p class="form-error">Informe o token de autorização e o CNPJ do contratante (14 dígitos).</p>';
         return;
       }
-      const data = await api(`/integracao/serpro?acao=faturamento&token=${encodeURIComponent(token)}&contratante=${contratante}`);
-      el.innerHTML = `<h4>Faturamento (Compartilha RFB)</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.faturamento)}`;
-      return;
-    }
-
-    if (svc === 'faturamento-autorizacoes') {
-      const contratante = (serproExtra('contratante')?.value || '').replace(/\D/g, '');
-      const titular = (serproExtra('titular')?.value || '').replace(/\D/g, '');
-      if (contratante.length !== 14 || titular.length !== 11) {
+      if (tipo === 'autorizacoes' && (contratante.length !== 14 || titular.length !== 11)) {
         el.innerHTML = '<p class="form-error">CNPJ do contratante (14) e CPF do titular (11) são obrigatórios.</p>';
         return;
       }
-      const data = await api(`/integracao/serpro?acao=faturamento-autorizacoes&contratante=${contratante}&titular=${titular}`);
-      el.innerHTML = `<h4>Autorizações de Faturamento</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.autorizacoes)}`;
+      const data = await api(`/integracao/serpro?acao=faturamento&tipo=${tipo}&token=${encodeURIComponent(token)}&contratante=${contratante}&titular=${titular}`);
+      el.innerHTML = `${serproCabecalho(`Faturamento (Compartilha RFB) · ${tipo}`, data)}${serproRenderCompartilha(data.resumo)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1460,7 +1635,7 @@ async function consultarSerpro() {
         return;
       }
       const data = await api('/integracao/serpro?acao=contador', { method: 'POST', body: JSON.stringify({ operacao, jwtToken: jwt, dados }) });
-      el.innerHTML = `<h4>Integra Contador · ${ddEsc(operacao)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.retorno)}`;
+      el.innerHTML = `${serproCabecalho(`Integra Contador · ${operacao}`, data)}${ddBloque(data.retorno)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1479,7 +1654,7 @@ async function consultarSerpro() {
         }
       }
       const data = await api('/integracao/serpro?acao=carimbo', { method: 'POST', body: JSON.stringify({ base64, document }) });
-      el.innerHTML = `<h4>Carimbo de Tempo</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.verificacao)}`;
+      el.innerHTML = `${serproCabecalho('Carimbo de Tempo', data)}${ddBloque(data.verificacao)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1498,13 +1673,13 @@ async function consultarSerpro() {
       }
       const data = await api(`/integracao/serpro?acao=${svc}&tipo=${tipo}&token=${encodeURIComponent(token)}&contratante=${contratante}&titular=${titular}`);
       const titulo = svc === 'renda' ? 'Renda PF (IRPF)' : 'Restituição IRPF';
-      el.innerHTML = `<h4>${titulo} · ${ddEsc(tipo)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.renda || data.restituicao)}`;
+      el.innerHTML = `${serproCabecalho(`${titulo} · ${tipo}`, data)}${serproRenderCompartilha(data.resumo)}${serproDetalhes(data)}`;
       return;
     }
 
     if (svc === 'datavalid-status') {
       const data = await api('/integracao/serpro?acao=datavalid-status');
-      el.innerHTML = `<h4>Datavalid · Status</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.status)}`;
+      el.innerHTML = `${serproCabecalho('Datavalid · Status', data)}${ddBloque(data.status)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1521,24 +1696,84 @@ async function consultarSerpro() {
         return;
       }
       const data = await api(`/integracao/serpro?acao=nfe-push&tipo=${tipo}${tipo === 'excluir' ? '&id=' + encodeURIComponent(id) : ''}`, { method: 'POST', body: JSON.stringify({ chaves, id }) });
-      el.innerHTML = `<h4>NF-e · Monitoramento (push)</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.push)}`;
+      el.innerHTML = `${serproCabecalho('NF-e · Monitoramento (push)', data)}${ddBloque(data.push)}${serproDetalhes(data)}`;
       return;
     }
 
     if (svc === 'antecipa') {
-      const tipo = serproExtra('tipo')?.value || 'avaliacao';
+      const tipo = serproExtra('tipo')?.value || 'cotacoes';
       const id = (serproExtra('id')?.value || '').trim();
-      const ni = ($('serproInput')?.value || '').replace(/\D/g, '');
+      const ni = (serproExtra('ni')?.value || '').replace(/\D/g, '');
+      const uasg = (serproExtra('uasg')?.value || '').trim();
+      const contrato = (serproExtra('contrato')?.value || '').trim();
+      const nivel = serproExtra('nivel')?.value || 'detalhada';
+      if (['dadosbasicos', 'situacaonivel', 'regularidade', 'ocorrencias', 'historico'].includes(tipo) && !ni) {
+        el.innerHTML = '<p class="form-error">Informe o CPF ou CNPJ do fornecedor.</p>';
+        return;
+      }
+      if (['proposta', 'arquivo'].includes(tipo) && !id) {
+        el.innerHTML = '<p class="form-error">Informe o ID (cotação / arquivo).</p>';
+        return;
+      }
+      if (tipo === 'contrato' && (!id || !uasg || !contrato)) {
+        el.innerHTML = '<p class="form-error">Informe cotação, UASG e número do contrato.</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=antecipa&tipo=${tipo}&ni=${ni}&id=${encodeURIComponent(id)}&uasg=${encodeURIComponent(uasg)}&contrato=${encodeURIComponent(contrato)}&nivel=${nivel}`);
+      el.innerHTML = `${serproCabecalho(`Antecipa Gov · Portal · ${tipo}`, data)}${ddBloque(data.antecipa)}${serproDetalhes(data)}`;
+      return;
+    }
+
+    if (svc === 'pilar') {
+      const tipo = serproExtra('tipo')?.value || 'avaliacao';
+      const ni = (serproExtra('ni')?.value || '').replace(/\D/g, '');
+      const id = (serproExtra('id')?.value || '').trim();
+      const uasg = (serproExtra('uasg')?.value || '').trim();
+      const contrato = (serproExtra('contrato')?.value || '').trim();
       if (tipo === 'avaliacao' && ni.length !== 11 && ni.length !== 14) {
         el.innerHTML = '<p class="form-error">Informe o CPF (11) ou CNPJ (14) do fornecedor.</p>';
         return;
       }
-      if (['contratos', 'ordembancaria', 'proposta'].includes(tipo) && !id) {
+      if (['contratos', 'ordembancaria', 'operacao'].includes(tipo) && !id) {
         el.innerHTML = '<p class="form-error">Informe o ID.</p>';
         return;
       }
-      const data = await api(`/integracao/serpro?acao=antecipa&tipo=${tipo}&ni=${ni}&id=${encodeURIComponent(id)}`);
-      el.innerHTML = `<h4>Antecipa Gov · ${ddEsc(tipo)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.antecipa)}`;
+      if (['cotacao', 'documento', 'cronograma', 'empenhos', 'faturas', 'historico', 'itens'].includes(tipo) && (!id || !uasg || !contrato)) {
+        el.innerHTML = '<p class="form-error">Informe cotação, UASG e número do contrato.</p>';
+        return;
+      }
+      if (tipo === 'empenho' && (!id || !uasg || !contrato)) {
+        el.innerHTML = '<p class="form-error">Informe cotação, UASG e número do empenho.</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=pilar&tipo=${tipo}&ni=${ni}&id=${encodeURIComponent(id)}&uasg=${encodeURIComponent(uasg)}&contrato=${encodeURIComponent(contrato)}`);
+      el.innerHTML = `${serproCabecalho(`Antecipa Gov · PILAR · ${tipo}`, data)}${ddBloque(data.pilar)}${serproDetalhes(data)}`;
+      return;
+    }
+
+    if (svc === 'ccir') {
+      const tipo = serproExtra('tipo')?.value || 'ni';
+      const ni = (serproExtra('ni')?.value || '').replace(/\D/g, '');
+      const codigo = (serproExtra('codigo')?.value || '').trim().toUpperCase();
+      if (tipo === 'ni' && ni.length !== 11 && ni.length !== 14) {
+        el.innerHTML = '<p class="form-error">Informe o CPF ou CNPJ do titular do imóvel.</p>';
+        return;
+      }
+      if (['codigo', 'emitir'].includes(tipo) && !codigo) {
+        el.innerHTML = '<p class="form-error">Informe o código do imóvel (INCRA).</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=ccir&tipo=${tipo}&ni=${ni}&codigo=${encodeURIComponent(codigo)}`);
+      if (tipo === 'ni' && Array.isArray(data.ccir)) {
+        el.innerHTML = `
+          ${serproCabecalho('CCIR · Imóveis rurais do titular', data)}
+          ${serproKv('Códigos encontrados', data.ccir.length)}
+          ${data.ccir.map((c) => `<div class="kv"><span>Código INCRA</span><b>${ddEsc(String(c))}</b></div>`).join('')}
+          <p class="mt-2 small muted">Use o tipo “Dados do CCIR pelo código” com um dos códigos acima.</p>
+          ${serproDetalhes(data)}`;
+        return;
+      }
+      el.innerHTML = `${serproCabecalho(tipo === 'emitir' ? 'CCIR · Emissão' : tipo === 'status' ? 'CCIR · Status' : 'CCIR · Dados do imóvel', data)}${tipo === 'status' ? ddBloque(data.ccir) : serproRenderCcir(data.resumo)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1556,21 +1791,7 @@ async function consultarSerpro() {
       }
       const modo = serproExtra('modo')?.value || 'basica';
       const data = await api(`/integracao/serpro?acao=cnpj&cnpj=${valor}&modo=${modo}`);
-      if (modo !== 'basica') {
-        el.innerHTML = `<h4>Consulta CNPJ · ${ddEsc(modo)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.dados)}`;
-        return;
-      }
-      const d = data.cnpj || {};
-      el.innerHTML = `
-        <h4>${ddEsc(d.razao_social || 'CNPJ')}</h4>
-        <p class="muted small">${ddEsc(data.fonte || 'Serpro PIN')}${d.nome_fantasia ? ' · ' + ddEsc(d.nome_fantasia) : ''}</p>
-        <div class="kv"><span>Situação cadastral</span><b>${ddEsc(String(d.situacao_cadastral || '—'))}</b></div>
-        <div class="kv"><span>CNAE principal</span><b>${d.cnae_codigo ? d.cnae_codigo + (d.cnae_principal ? ' · ' + ddEsc(String(d.cnae_principal)) : '') : '—'}</b></div>
-        <div class="kv"><span>Município/UF</span><b>${ddEsc(String(d.municipio || '—'))}/${ddEsc(String(d.uf || ''))}</b></div>
-        ${d.email ? `<div class="kv"><span>E-mail</span><b>${ddEsc(d.email)}</b></div>` : ''}
-        ${d.telefone ? `<div class="kv"><span>Telefone</span><b>${ddEsc(d.telefone)}</b></div>` : ''}
-        <div class="kv"><span>Capital social</span><b>${fmt(Number(d.capital_social || 0))}</b></div>
-        ${(d.socios || []).length ? `<p class="mt-3 small"><b>Sócios:</b> ${d.socios.map((s) => ddEsc(s.nome || s.nomeSocio || s.razaoSocial || '')).filter(Boolean).join(', ')}</p>` : ''}`;
+      el.innerHTML = serproRenderCnpj(data.resumo || data.cnpj || {}, data);
       return;
     }
 
@@ -1587,16 +1808,7 @@ async function consultarSerpro() {
         return;
       }
       const data = await api(`/integracao/serpro?acao=${svc}&cpf=${valor}&nasc=${nasc}`);
-      if (svc === 'situacao-cpf') {
-        el.innerHTML = `<h4>Situação do CPF</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.situacao)}`;
-        return;
-      }
-      const sit = data.situacao;
-      el.innerHTML = `
-        <h4>Consulta CPF</h4>
-        <p class="muted small">${ddEsc(data.fonte || '')}</p>
-        ${sit ? `<div class="kv"><span>Situação cadastral</span><b>${ddEsc(String(sit.codigo || ''))} · ${ddEsc(String(sit.descricao || '—'))}</b></div>` : ''}
-        ${ddBloque(data.cpf)}`;
+      el.innerHTML = serproRenderCpf(data.resumo || {}, data);
       return;
     }
 
@@ -1606,7 +1818,17 @@ async function consultarSerpro() {
         return;
       }
       const data = await api(`/integracao/serpro?acao=nfe&chave=${valor}`);
-      el.innerHTML = `<h4>Consulta NF-e</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.nfe)}`;
+      el.innerHTML = serproRenderNfe(data.resumo || {}, data);
+      return;
+    }
+
+    if (svc === 'nfe-escalonada') {
+      if (valor.length !== 44) {
+        el.innerHTML = '<p class="form-error">Chave de acesso inválida (44 dígitos).</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=nfe-escalonada&chave=${valor}`);
+      el.innerHTML = `${serproCabecalho('NF-e Escalonada (processamento em lote)', data)}${ddBloque(data.resumo)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1618,7 +1840,19 @@ async function consultarSerpro() {
       const tipo = Number(serproExtra('tipo')?.value || (valor.length === 11 ? 1 : 2));
       const pdf = serproExtra('pdf')?.checked === true;
       const data = await api('/integracao/serpro?acao=cnd', { method: 'POST', body: JSON.stringify({ tipo, contribuinte: valor, pdf }) });
-      el.innerHTML = `<h4>CND - Certidão Negativa de Débitos</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.certidao)}`;
+      const s = data.resumo || {};
+      window.__serproCndPdf = data.pdfBase64 || '';
+      el.innerHTML = `
+        ${serproCabecalho('CND · Certidão Negativa de Débitos', data)}
+        ${serproKv('Status', s.status)}
+        ${serproKv('Mensagem', s.mensagem)}
+        ${serproKv('Contribuinte', s.contribuinte)}
+        ${serproKv('Tipo de certidão', s.tipoCertidao)}
+        ${serproKv('Código de controle', s.codigoControle)}
+        ${serproKv('Emissão', fmtDataBr(s.dataEmissao) || s.dataEmissao)}
+        ${serproKv('Validade', fmtDataBr(s.dataValidade) || s.dataValidade)}
+        ${s.temPdf && data.pdfBase64 ? '<button class="btn btn-ghost mt-2" onclick="UI.baixarCndPdf()">⬇ Baixar certidão em PDF</button>' : ''}
+        ${serproDetalhes(data)}`;
       return;
     }
 
@@ -1674,7 +1908,7 @@ async function consultarSerpro() {
     if (svc === 'compras') {
       const tipo = serproExtra('tipo')?.value || 'chat';
       const data = await api(`/integracao/serpro?acao=compras&compra=${encodeURIComponent(valor)}&tipo=${tipo}`);
-      el.innerHTML = `<h4>Compras.gov.br · ${tipo === 'diligencias' ? 'Diligências' : 'Chat'}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.mensagens)}`;
+      el.innerHTML = `${serproCabecalho('Compras.gov.br · ' + (tipo === 'diligencias' ? 'Diligências' : 'Chat'), data)}${ddBloque(data.mensagens)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1698,7 +1932,7 @@ async function consultarSerpro() {
       } else {
         data = await api(`/integracao/serpro?acao=comex&servico=habitacao&cnpj=${valor}`, { method: 'POST', body: JSON.stringify({ jwtToken: jwt }) });
       }
-      el.innerHTML = `<h4>Integra Comex · ${ddEsc(servico)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.comex)}`;
+      el.innerHTML = `${serproCabecalho(`Integra Comex · ${servico}`, data)}${ddBloque(data.comex)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1710,7 +1944,9 @@ async function consultarSerpro() {
         return;
       }
       const data = await api(`/integracao/serpro?acao=cartorio&ni=${valor}&modo=${modo}`);
-      el.innerHTML = `<h4>Cartório Data · ${ddEsc(modo)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.consulta)}`;
+      el.innerHTML = modo === 'cpf'
+        ? serproRenderCpf(data.resumo || {}, data)
+        : serproRenderCnpj(data.resumo || {}, data, `Cartório Data · ${modo}`);
       return;
     }
 
@@ -1730,7 +1966,7 @@ async function consultarSerpro() {
       const rfb = serproExtra('rfb')?.checked === true;
       const senatran = serproExtra('senatran')?.checked === true;
       const data = await api('/integracao/serpro?acao=datavalid', { method: 'POST', body: JSON.stringify({ cpf: valor, nome, nasc, rfb, senatran }) });
-      el.innerHTML = `<h4>Datavalid · Validação</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.validacao)}`;
+      el.innerHTML = `${serproCabecalho('Datavalid · Validação de identidade', data)}${ddBloque(data.validacao)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1757,7 +1993,7 @@ async function consultarSerpro() {
           sexo: (serproExtra('sexo')?.value || '').trim().toUpperCase(),
         }),
       });
-      el.innerHTML = `<h4>BioValid · ${servico === 'liveness' ? 'Prova de vida' : 'Token'}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.biovalid)}`;
+      el.innerHTML = `${serproCabecalho(`BioValid · ${servico === 'liveness' ? 'Prova de vida' : 'Token'}`, data)}${ddBloque(data.biovalid)}${serproDetalhes(data)}`;
       return;
     }
 
@@ -1775,7 +2011,7 @@ const UI = {
   consultarPgfn, abrirPgfn, pgfnLinks,
   consultarSerasa, consultarApibrasil, apibrasilSaldo,
   consultarDirectdata, ddEndpointChange,
-  consultarSerpro, serproServicoChange,
+  consultarSerpro, serproServicoChange, baixarCndPdf,
   carregarSaldoZapsign, toggleCertForm, criarCertificado, carregarProtocolos,
   enviarChat, analisarNotaIA, alterarUser, removerUser,
   carregarAssinatura, assinar, salvarWhatsapp, imprimirRecibo,
