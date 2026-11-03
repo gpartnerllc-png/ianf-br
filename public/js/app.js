@@ -1325,6 +1325,104 @@ async function consultarDirectdata() {
   }
 }
 
+// ---------- Serpro (Receita / PGFN / IA) ----------
+const SERPRO_LOJA = 'https://loja.serpro.gov.br';
+
+function serproServicoChange() {
+  const svc = $('serproServico')?.value || 'cnpj';
+  $('serproIaRow').classList.toggle('hidden', svc !== 'ia');
+  $('serproInput').classList.toggle('hidden', svc === 'ia');
+  $('serproInput').placeholder = svc === 'divida-ativa' ? 'CPF ou CNPJ' : svc === 'cnpj' ? '00.000.000/0000-00' : '000.000.000-00';
+  $('serpro-result').innerHTML = '';
+}
+
+function serproErro(el, erro) {
+  const base = `<p class="form-error">${ddEsc(erro.message)}</p>`;
+  if (erro.code === 'SERPRO_SEM_ASSINATURA' || erro.code === 'SERPRO_NAO_CONFIGURADO') {
+    el.innerHTML = `${base}<p class="mt-3"><a class="link" href="${SERPRO_LOJA}" target="_blank" rel="noopener">Assinar produtos Serpro na loja oficial ↗</a></p>`;
+    return;
+  }
+  el.innerHTML = base;
+}
+
+async function consultarSerpro() {
+  const svc = $('serproServico')?.value || 'cnpj';
+  const el = $('serpro-result');
+  el.innerHTML = '<p class="muted">Consultando a base oficial do Serpro...</p>';
+
+  try {
+    if (svc === 'ia') {
+      const prompt = ($('serproIaPrompt')?.value || '').trim();
+      if (!prompt) {
+        el.innerHTML = '<p class="form-error">Descreva o que a IA deve analisar.</p>';
+        return;
+      }
+      const data = await api('/integracao/serpro?acao=ia', { method: 'POST', body: JSON.stringify({ prompt }) });
+      el.innerHTML = `<h4>Serpro IA</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.resposta)}`;
+      return;
+    }
+
+    const valor = ($('serproInput')?.value || '').replace(/\D/g, '');
+    const campo = svc === 'divida-ativa' ? 'ni' : svc === 'cnpj' ? 'cnpj' : 'cpf';
+    const esperado = svc === 'divida-ativa' ? '11 ou 14' : svc === 'cnpj' ? '14' : '11';
+    if (svc === 'divida-ativa') {
+      if (valor.length !== 11 && valor.length !== 14) {
+        el.innerHTML = '<p class="form-error">Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).</p>';
+        return;
+      }
+    } else if (valor.length !== Number(esperado)) {
+      el.innerHTML = `<p class="form-error">${svc === 'cnpj' ? 'CNPJ' : 'CPF'} inválido (${esperado} dígitos).</p>`;
+      return;
+    }
+
+    const data = await api(`/integracao/serpro?acao=${svc}&${campo}=${valor}`);
+
+    if (svc === 'divida-ativa') {
+      const tags = {
+        com_debitos: ['tag-cancelada', '⚠ Com débitos'],
+        regular: ['tag-autorizada', '✓ Regular'],
+        sem_registros: ['tag-rascunho', 'Sem registros'],
+      };
+      const [tagCls, tagTxt] = tags[data.situacao] || ['tag-rascunho', data.situacao];
+      const rows = (data.inscricoes || []).map((i) => `
+        <div class="kv"><span>${ddEsc(i.origem || 'Inscrição ' + i.numero)}${i.numero ? ' · ' + ddEsc(i.numero) : ''}</span><b>${ddEsc(String(i.situacao || '—'))} — ${fmt(i.valor)}</b></div>`).join('');
+      el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <h4>Dívida Ativa da União</h4>
+          <span class="tag ${tagCls}">${tagTxt}</span>
+        </div>
+        <p class="muted small">${ddEsc(data.fonte || '')}</p>
+        <div class="kv"><span>Total consolidado</span><b>${fmt(data.totalConsolidado)}</b></div>
+        ${rows || '<p class="muted small">Nenhuma inscrição retornada.</p>'}`;
+      return;
+    }
+
+    if (svc === 'cnpj') {
+      const d = data.cnpj || {};
+      el.innerHTML = `
+        <h4>${ddEsc(d.razao_social || 'CNPJ')}</h4>
+        <p class="muted small">${ddEsc(data.fonte || 'Serpro PIN')}${d.nome_fantasia ? ' · ' + ddEsc(d.nome_fantasia) : ''}</p>
+        <div class="kv"><span>Situação cadastral</span><b>${ddEsc(String(d.situacao_cadastral || '—'))}</b></div>
+        <div class="kv"><span>CNAE principal</span><b>${d.cnae_codigo ? d.cnae_codigo + (d.cnae_principal ? ' · ' + ddEsc(String(d.cnae_principal)) : '') : '—'}</b></div>
+        <div class="kv"><span>Município/UF</span><b>${ddEsc(String(d.municipio || '—'))}/${ddEsc(String(d.uf || ''))}</b></div>
+        ${d.email ? `<div class="kv"><span>E-mail</span><b>${ddEsc(d.email)}</b></div>` : ''}
+        ${d.telefone ? `<div class="kv"><span>Telefone</span><b>${ddEsc(d.telefone)}</b></div>` : ''}
+        <div class="kv"><span>Capital social</span><b>${fmt(Number(d.capital_social || 0))}</b></div>
+        ${(d.socios || []).length ? `<p class="mt-3 small"><b>Sócios:</b> ${d.socios.map((s) => ddEsc(s.nome || s.nomeSocio || s.razaoSocial || '')).filter(Boolean).join(', ')}</p>` : ''}`;
+      return;
+    }
+
+    if (svc === 'situacao-cpf') {
+      el.innerHTML = `<h4>Situação do CPF</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.situacao)}`;
+      return;
+    }
+
+    el.innerHTML = `<h4>Consulta CPF</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.cpf)}`;
+  } catch (erro) {
+    serproErro(el, erro);
+  }
+}
+
 // ---------- Boot ----------
 const UI = {
   calcFiscal, liberarNome, validarNome, adicionarProduto, renderItens, emitirNota,
@@ -1333,6 +1431,7 @@ const UI = {
   consultarPgfn, abrirPgfn, pgfnLinks,
   consultarSerasa, consultarApibrasil, apibrasilSaldo,
   consultarDirectdata, ddEndpointChange,
+  consultarSerpro, serproServicoChange,
   carregarSaldoZapsign, toggleCertForm, criarCertificado, carregarProtocolos,
   enviarChat, analisarNotaIA, alterarUser, removerUser,
   carregarAssinatura, assinar, salvarWhatsapp, imprimirRecibo,
