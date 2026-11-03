@@ -410,7 +410,7 @@
                     <div id="dd-result" class="result-card mt-3"></div>
                 </div>
                 <div class="panel glass">
-                    <h3 class="panel-title">🇧🇷 Serpro <span class="panel-sub">Bases oficiais do governo · 23 serviços</span></h3>
+                    <h3 class="panel-title">🇧🇷 Serpro <span class="panel-sub">Bases oficiais do governo · 25 serviços · produção + demonstração automáticas</span></h3>
                     <p class="muted small">Receita Federal (CNPJ/CPF/NF-e/Renda/Restituição), PGFN (Dívida Ativa/CND), Cartório Data, Datavalid/BioValid (biometria), Antecipa Gov, DUE, Faturamento Compartilha, Compras.gov.br, Integra Contador, Carimbo de Tempo, Integra Comex e Serpro IA — APIs oficiais do Serpro (assinatura em loja.serpro.gov.br).</p>
                     <div class="search-row mt-3">
                         <select class="field" id="serproServico" style="max-width:300px" onchange="UI.serproServicoChange()">
@@ -422,12 +422,13 @@
                             </optgroup>
                             <optgroup label="Fiscal (Receita / PGFN)">
                                 <option value="nfe">Consulta NF-e (chave)</option>
+                                <option value="nfe-escalonada">NF-e Escalonada (lote)</option>
                                 <option value="nfe-push">NF-e Monitoramento (push)</option>
                                 <option value="cnd">CND - Certidão Negativa</option>
                                 <option value="divida-ativa">Dívida Ativa da União</option>
                                 <option value="divida-inscricao">Inscrição Dívida Ativa</option>
-                                <option value="faturamento">Faturamento (Compartilha)</option>
-                                <option value="faturamento-autorizacoes">Autorizações de Faturamento</option>
+                                <option value="faturamento">Faturamento / Autorizações (Compartilha)</option>
+                                <option value="ccir">CCIR - Imóvel Rural (INCRA)</option>
                             </optgroup>
                             <optgroup label="IRPF (Compartilha e-CAC)">
                                 <option value="renda">Renda PF (Declaração)</option>
@@ -443,7 +444,8 @@
                                 <option value="comex">Integra Comex</option>
                             </optgroup>
                             <optgroup label="Financeiro Gov">
-                                <option value="antecipa">Antecipa Gov</option>
+                                <option value="antecipa">Antecipa Gov · Portal</option>
+                                <option value="pilar">Antecipa Gov · PILAR</option>
                             </optgroup>
                             <optgroup label="Serviços">
                                 <option value="compras">Compras.gov.br</option>

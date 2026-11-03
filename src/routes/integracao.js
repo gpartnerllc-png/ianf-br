@@ -45,31 +45,34 @@ export async function handleCnpj(env, request) {
   if (!isValidCnpj(cnpj)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
   if (!(await rateLimit(env, getIp(request), 'cnpj'))) return err('Limite de consultas atingido.', 429, 'RATE_LIMIT');
 
-  // Fonte principal: Serpro PIN (oficial). Fallback: BrasilAPI (gratuita).
+  // Fonte principal: Serpro (oficial, com fallback automático p/ demonstração). Fallback: BrasilAPI (gratuita).
   let resultado;
   if (serproEnabled(env)) {
-    resultado = await serpro.consultarCnpj(env, cnpj);
-    if (resultado.ok && resultado.data) {
-      const d = resultado.data;
-      resultado.data = {
-        cnpj,
-        razao_social: d.nomeEmpresarial || d.razaoSocial || d.razao_social,
-        nome_fantasia: d.nomeFantasia || '',
-        situacao_cadastral: d.descricaoSituacaoCadastral || d.situacaoCadastral,
-        cnae_codigo: d.codigoCnaePrincipal || d.cnaeFiscal,
-        cnae_principal: d.descricaoCnaePrincipal || d.cnae_principal || '',
-        uf: d.uf,
-        municipio: d.municipio,
-        logradouro: d.logradouro || '',
-        numero: d.numero || '',
-        bairro: d.bairro || '',
-        cep: d.cep || '',
-        telefone: d.telefone || d.dddTelefone1 || '',
-        email: d.email || '',
-        porte: d.porte || '',
-        capital_social: d.capitalSocial || d.capital_social || 0,
-        socios: d.socios || [],
-        fonte: 'Serpro PIN (Receita Federal)',
+    const r = await serpro.consultarCnpj(env, cnpj);
+    if (r.ok && r.data) {
+      const s = normalizarCnpjSerpro(r.data);
+      resultado = {
+        ok: true,
+        data: {
+          cnpj: s.cnpj,
+          razao_social: s.razao_social,
+          nome_fantasia: s.nome_fantasia,
+          situacao_cadastral: s.situacao_cadastral,
+          cnae_codigo: s.cnae_principal.split(' - ')[0] || '',
+          cnae_principal: s.cnae_principal,
+          uf: s.uf,
+          municipio: s.municipio,
+          logradouro: s.endereco,
+          numero: '',
+          bairro: s.bairro,
+          cep: s.cep,
+          telefone: s.telefones[0] || '',
+          email: s.email,
+          porte: s.porte,
+          capital_social: s.capital_social || 0,
+          socios: s.socios,
+        },
+        fonte: s.fonte || `Serpro (${r.ambiente === 'demo' ? 'demonstração' : 'Receita Federal'})`,
       };
     }
   }
@@ -297,6 +300,234 @@ function normalizarInscricoes(d) {
   }));
 }
 
+// ============ SERPRO: normalizadores detalhados (schemas OpenAPI + respostas reais) ============
+
+function cd(v) {
+  if (v == null) return '';
+  if (typeof v === 'string' || typeof v === 'number') return String(v);
+  return [v.codigo, v.descricao].filter((x) => x != null && x !== '').join(' - ');
+}
+
+function foneSerpro(t = {}) {
+  return t.ddd ? `(${t.ddd}) ${t.numero || ''}` : String(t.numero || '');
+}
+
+function enderecoSerpro(e = {}) {
+  return [e.tipoLogradouro, e.logradouro, e.numero, e.complemento].filter(Boolean).join(', ');
+}
+
+function normalizarCnpjSerpro(d = {}) {
+  const e = d.endereco || {};
+  return {
+    cnpj: d.ni || '',
+    tipo_estabelecimento: !d.tipoEstabelecimento ? '' : (String(d.tipoEstabelecimento) === '1' ? 'Matriz' : `Filial (${d.tipoEstabelecimento})`),
+    razao_social: d.nomeEmpresarial || '',
+    nome_fantasia: d.nomeFantasia || '',
+    situacao_cadastral: cd(d.situacaoCadastral),
+    situacao_codigo: d.situacaoCadastral?.codigo || '',
+    situacao_data: d.situacaoCadastral?.data || '',
+    situacao_motivo: d.situacaoCadastral?.motivo || '',
+    natureza_juridica: cd(d.naturezaJuridica),
+    data_abertura: d.dataAbertura || '',
+    cnae_principal: cd(d.cnaePrincipal),
+    cnae_secundarias: (d.cnaeSecundarias || []).map(cd),
+    endereco: enderecoSerpro(e),
+    bairro: e.bairro || '',
+    municipio: e.municipio?.descricao || (typeof e.municipio === 'string' ? e.municipio : ''),
+    municipio_codigo: e.municipio?.codigo || '',
+    uf: e.uf || '',
+    cep: e.cep || '',
+    pais: cd(e.pais),
+    municipio_jurisdicao: cd(d.municipioJurisdicao),
+    telefones: (d.telefones || []).map(foneSerpro),
+    email: d.correioEletronico || '',
+    capital_social: d.capitalSocial ?? '',
+    porte: d.porte || '',
+    situacao_especial: d.situacaoEspecial || '',
+    data_situacao_especial: d.dataSituacaoEspecial || '',
+    socios: (d.socios || []).map((s) => ({
+      nome: s.nome || s.nomeSocio || '',
+      qualificacao: cd(s.qualificacao),
+      faixa_etaria: cd(s.faixaEtaria),
+      condicao: cd(s.condicao),
+    })),
+    informacoes_adicionais: d.informacoesAdicionais || null,
+  };
+}
+
+function normalizarCpfSerpro(d = {}) {
+  return {
+    cpf: d.ni || '',
+    nome: d.nome || '',
+    nome_social: d.nomeSocial || '',
+    situacao: cd(d.situacao),
+    situacao_codigo: d.situacao?.codigo || '',
+    nascimento: d.nascimento || '',
+    data_inscricao: d.dataInscricao || '',
+  };
+}
+
+function enderNfe(e = {}) {
+  return [e.xLgr, e.nro, e.xBairro, e.xMun, e.UF, e.CEP].filter(Boolean).join(', ');
+}
+
+function normalizarNfeSerpro(d = {}) {
+  const proc = d.nfeProc || d;
+  const prot = proc.protNFe?.infProt || {};
+  const inf = proc.NFe?.infNFe || proc.infNFe || {};
+  const ide = inf.ide || {};
+  const emit = inf.emit || {};
+  const dest = inf.dest || {};
+  const tot = inf.total?.ICMSTot || {};
+  const dets = [].concat(inf.det || []);
+  const vols = [].concat(inf.transp?.vol || []);
+  const dup = [].concat(inf.pag?.detPag || inf.pag?.dup || []);
+  return {
+    chave: prot.chNFe || ide.chNFe || '',
+    situacao_processamento: [prot.cStat, prot.xMotivo].filter(Boolean).join(' · '),
+    numero_protocolo: prot.nProt || '',
+    ambiente: prot.tpAmb ? (String(prot.tpAmb) === '1' ? 'Produção' : 'Homologação') : '',
+    data_recebimento: prot.dhRecbto || '',
+    versao_aplicacao: prot.verAplic || '',
+    modelo: ide.mod || '', serie: ide.serie || '', numero: ide.nNF || '',
+    natureza_operacao: ide.natOp || '',
+    tipo: ide.tpNF ? (String(ide.tpNF) === '0' ? 'Entrada' : 'Saída') : '',
+    data_emissao: ide.dhEmi || '',
+    destino_operacao: cd({ descricao: ide.idDest === '1' ? 'Internacional' : ide.idDest === '2' ? 'Interestadual' : ide.idDest === '3' ? 'Municipal' : '' }),
+    finalidade: ide.finNFe ? ({ '1': 'Normal', '2': 'Complementar', '3': 'Ajuste', '4': 'Devolução' }[ide.finNFe] || ide.finNFe) : '',
+    emissor: { documento: emit.CNPJ || emit.CPF || '', nome: emit.xNome || '', fantasia: emit.xFant || '', inscricao_estadual: emit.IE || '', endereco: enderNfe(emit.enderEmit || {}) },
+    destinatario: { documento: dest.CNPJ || dest.CPF || '', nome: dest.xNome || '', endereco: enderNfe(dest.enderDest || {}), email: dest.email || '' },
+    valores: {
+      produtos: moedaBr(tot.vProd), frete: moedaBr(tot.vFrete), seguro: moedaBr(tot.vSeg), desconto: moedaBr(tot.vDesc),
+      icms: moedaBr(tot.vICMS), icms_st: moedaBr(tot.vST), ipi: moedaBr(tot.vIPI), pis: moedaBr(tot.vPIS), cofins: moedaBr(tot.vCOFINS),
+      importacao: moedaBr(tot.vII), outros: moedaBr(tot.vOutro), total_nota: moedaBr(tot.vNF),
+    },
+    itens: dets.map((x) => ({
+      item: x.nItem || '', codigo: x.prod?.cProd || '', descricao: x.prod?.xProd || '',
+      ncm: x.prod?.NCM || '', cfop: x.prod?.CFOP || '', unidade: x.prod?.uCom || '',
+      quantidade: x.prod?.qCom || '', valor_unitario: moedaBr(x.prod?.vUni), valor: moedaBr(x.prod?.vProd),
+    })).slice(0, 100),
+    volumes: vols.map((v) => ({ especie: v.especie || v['espécie'] || '', marcas: v.marca || '', numeracao: v.nVol || '', peso_liquido: v.pesoL || '', peso_bruto: v.pesoB || '' })),
+    pagamentos: dup.map((p) => ({ forma: p.tPag ? ({ '01': 'Dinheiro', '02': 'Cheque', '03': 'Cartão de Crédito', '04': 'Cartão de Débito', '05': 'Crédito Loja', '06': 'Outros', '08': 'PIX', '09': 'Transferência' }[p.tPag] || p.tPag) : '', valor: moedaBr(p.vPag), descricao: p.xPag || '' })).slice(0, 30),
+    informacoes_adicionais: inf.infAdic?.infCpl || inf.infAdic?.infFisco || '',
+  };
+}
+
+function bytesParaTexto(v) {
+  if (v == null || v === '') return '';
+  try {
+    const bin = atob(String(v));
+    let ctrl = 0;
+    for (let i = 0; i < bin.length; i++) {
+      const c = bin.charCodeAt(i);
+      if (c < 32 && c !== 9 && c !== 10 && c !== 13) ctrl++;
+    }
+    if (bin.length && ctrl / bin.length > 0.1) return '(conteúdo assinado ICP-Brasil — base64)';
+    return bin;
+  } catch {
+    return String(v);
+  }
+}
+
+function dadosCompartilha(bloco) {
+  if (!bloco) return null;
+  const arr = Array.isArray(bloco) ? bloco : (bloco.dados || [bloco]);
+  return (Array.isArray(arr) ? arr : []).map((x) => ({
+    codigo: x.codigo || '', texto: x.texto || '', valor: x.valor || '', valorTexto: bytesParaTexto(x.valor),
+  }));
+}
+
+function normalizarCompartilha(d = {}) {
+  const blocos = {};
+  for (const k of ['dadosSimplesNacionalPgdasd', 'dadosSimplesNacionalDefis', 'dadosMeiDasnSimei', 'dadosMeiPgmei', 'dadosCnpj', 'dadosEcf', 'dadosPronampe']) {
+    const b = dadosCompartilha(d[k]);
+    if (b) blocos[k] = b;
+  }
+  const a = d.autorizacao || null;
+  return {
+    autorizacao: a ? { token: a.token || '', titular: a.titular || '', destinatario: a.destinatario || '', dataHoraRegistro: a.dataHoraRegistro || '', avisoLegal: a.avisoLegal || '' } : null,
+    servico: d.servico || '', idServico: d.idServico || '', versao: d.versao || '',
+    dados: dadosCompartilha(d.dados) || [],
+    blocos,
+    possuiErro: d.possuiErro, mensagem: d.mensagem || '',
+  };
+}
+
+function normalizarAutorizacoesCompartilha(d = {}) {
+  const lista = Array.isArray(d) ? d : (d.autorizacoes || []);
+  return {
+    autorizacoes: lista.map((a) => ({
+      ni: a.ni || '', token: a.token || '', status: a.status || '',
+      dataHoraStatus: a.dataHoraStatus || '', vigenciaInicial: a.dataHoraVigenciaInicial || '', vigenciaFinal: a.dataHoraVigenciaFinal || '',
+      idServico: a.idServico || '', versao: a.versao || '',
+      hashStatus: a.hashAssinadoPadraoIcpBrasilStatus || '', avisoLegal: a.avisoLegal || '',
+      parametrosAdicionais: a.parametrosAdicionais || null,
+    })),
+    errorResponse: d.errorResponse || '',
+  };
+}
+
+function normalizarCndSerpro(d = {}) {
+  const c = d.Certidao || null;
+  const pdf = c?.DocumentoPdf || '';
+  return {
+    status: d.Status ?? null,
+    mensagem: d.Messagem || d.Mensagem || '',
+    tipoContribuinte: c?.TipoContribuinte ?? '',
+    contribuinte: c?.ContribuinteCertidao || '',
+    tipoCertidao: c?.['TipoCertidão'] ?? c?.TipoCertidao ?? '',
+    codigoControle: c?.CodigoControle || '',
+    dataEmissao: c?.DataEmissao || '',
+    dataValidade: c?.DataValidade || '',
+    temPdf: Boolean(pdf),
+    pdfBase64: pdf,
+  };
+}
+
+function normalizarDueSerpro(d = {}) {
+  return {
+    numero: d.numero || '', ruc: d.ruc || '', chaveAcesso: d.chaveDeAcesso || '',
+    situacao: d.situacao || '', canal: d.canal || '', situacaoDaCarga: d.situacaoDaCarga || '',
+    bloqueadaParaEmbarque: String(d.bloqueadaParaEmbarque ?? ''), exigencia: d.exigencia || '',
+    retificada: String(d.retificada ?? ''), tratamentoAdministrativo: d.tratamentoAdministrativo || '',
+    tipoDocumentoFiscal: d.tipoDeDocumentoFiscal || '', declarante: cd(d.declarante),
+    operadorAutorizado: cd(d.operadorEconomicoAutorizado), formaExportacao: d.formaDeExportacao || '',
+    paisImportador: cd(d.paisDoImportador), exportacaoConsorciada: String(d.exportacaoConsorciada ?? ''),
+    pesoLiquidoTotal: d.pesoLiquidoTotal || '', valorMercadorias: moedaBr(d.valorTotalDasMercadorias),
+    moeda: d.moeda || '', localEmbarque: cd(d.localDeEmbarque), localDespacho: cd(d.localDeDespacho),
+    totalItens: (d.itens || []).length, totalEventos: (d.eventosDoHistorico || []).length,
+    itens: (d.itens || []).slice(0, 60), eventos: (d.eventosDoHistorico || []).slice(0, 60),
+  };
+}
+
+function normalizarCcir(d = {}) {
+  const controle = d.dadosControleCcir || d.dadosUltimoCcir || {};
+  return {
+    codigo_imovel: d.codigoImovelIncra || '', denominacao: d.denominacao || '',
+    area_total: d.areaTotal || '', area_registrada: d.totalAreaRegistrada || '',
+    area_certificada: d.areaCertificada || '', area_modulo_fiscal: d.areaModuloFiscal || '',
+    area_modulo_rural: d.areaModuloRural || '', numero_modulos_fiscais: d.numeroModulosFiscais || '',
+    fracao_minima: d.fracaoMinimaParcelamento || '', classificacao_fundiaria: cd(d.classificacaoFundiaria),
+    municipio_sede: d.municipioSede || '', uf_sede: d.ufSede || '',
+    pessoas_relacionadas: d.totalPessoasRelacionadasImovel || '',
+    situacao_ccir: controle.situacaoCcir || '', numero_ccir: controle.numeroCcir || '',
+    autenticidade: controle.numeroAutenticidadeCcir || '',
+    data_geracao: controle.dataGeracaoCcir || '', data_lancamento: controle.dataLancamento || '',
+    data_vencimento: controle.dataVencimentoCcir || '',
+    valor_total: moedaBr(controle.valorTotal), valor_cobrado: moedaBr(controle.valorCobrado),
+    juros: moedaBr(controle.juros), multa: moedaBr(controle.multa), debitados_anteriores: controle.debitosAnteriores || '',
+    titulares: (d.titulares || []).map((t) => ({
+      nome: t.nomeTitular || '', documento: t.cpfCnpj || '', condicao: t.condicaoTitularidade || '',
+      percentual: t.percentualDetencao || '', declarante: String(t.declarante ?? ''), nacionalidade: t.nacionalidade || '',
+    })),
+    areas_registradas: (d.areasRegistradas || []).map((a) => ({
+      area: a.area || '', registro: a.registro || '', cns_oficio: a.cnsOuOficio || '',
+      municipio_cartorio: a.municipioCartorio || '', uf_cartorio: a.ufCartorio || '',
+      livro_ficha: a.livroOuFicha || '', matricula: a.matriculaOuTranscricao || '', data_registro: a.dataRegistro || '',
+    })),
+  };
+}
+
 export async function handleSerpro(env, request) {
   const auth = await requireAuth(env, request);
   if (auth.error) return auth.error;
@@ -329,30 +560,24 @@ export async function handleSerpro(env, request) {
       const r = await serpro.consultarCnpj(env, cnpj, modo);
       if (!r.ok) return falha(r, `cnpj ${cnpj} ${modo} ${r.code || ''}`);
       const d = r.data || {};
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CNPJ', detalhe: `${cnpj} ${modo}`, ip });
+      const resumo = normalizarCnpjSerpro(d);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CNPJ', detalhe: `${cnpj} ${modo} ${r.ambiente}`, ip });
       return ok({
         cnpj: {
-          cnpj,
-          razao_social: d.nomeEmpresarial || d.razaoSocial || d.razao_social,
-          nome_fantasia: d.nomeFantasia || '',
-          situacao_cadastral: d.descricaoSituacaoCadastral || d.situacaoCadastral,
-          cnae_codigo: d.codigoCnaePrincipal || d.cnaeFiscal,
-          cnae_principal: d.descricaoCnaePrincipal || d.cnae_principal || '',
-          uf: d.uf,
-          municipio: d.municipio,
-          logradouro: d.logradouro || '',
-          numero: d.numero || '',
-          bairro: d.bairro || '',
-          cep: d.cep || '',
-          telefone: d.telefone || d.dddTelefone1 || '',
-          email: d.email || '',
-          porte: d.porte || '',
-          capital_social: d.capitalSocial || d.capital_social || 0,
-          socios: d.socios || [],
+          ...resumo,
+          // aliases legados (consumidos pelo autofill do Emissor)
+          razao_social: resumo.razao_social, nome_fantasia: resumo.nome_fantasia,
+          situacao_cadastral: resumo.situacao_cadastral, uf: resumo.uf, municipio: resumo.municipio,
+          logradouro: resumo.endereco, numero: '', bairro: resumo.bairro, cep: resumo.cep,
+          telefone: resumo.telefones[0] || '', email: resumo.email,
+          capital_social: resumo.capital_social, socios: resumo.socios,
         },
+        resumo,
         dados: d,
+        detalhes: d,
         modo,
-        fonte: `Serpro PIN (Receita Federal) · ${modo}`,
+        ambiente: r.ambiente,
+        fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro PIN (Receita Federal)'} · CNPJ v2 ${modo}`,
       });
     }
     case 'cpf': {
@@ -364,7 +589,7 @@ export async function handleSerpro(env, request) {
       if (!r.ok) return falha(r, `cpf ${cpf} ${r.code || ''}`);
       const d = r.data || {};
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CPF', detalhe: cpf, ip });
-      return ok({ cpf: d, situacao: d.situacao || null, fonte: 'Serpro PIN (Receita Federal) · CPF v3' });
+      return ok({ cpf: normalizarCpfSerpro(d), resumo: normalizarCpfSerpro(d), detalhes: d, ambiente: r.ambiente, situacao: d.situacao || null, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro PIN (Receita Federal)'} · CPF v3` });
     }
     case 'situacao-cpf': {
       const cpf = onlyNumbers(url.searchParams.get('cpf') || '');
@@ -375,15 +600,15 @@ export async function handleSerpro(env, request) {
       if (!r.ok) return falha(r, `situacao-cpf ${cpf} ${r.code || ''}`);
       const d = r.data || {};
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_SITUACAO_CPF', detalhe: cpf, ip });
-      return ok({ cpf, situacao: d.situacao || d, fonte: 'Serpro (Situação Cadastral do CPF)' });
+      return ok({ cpf, resumo: normalizarCpfSerpro(d), situacao: d.situacao || d, detalhes: d, ambiente: r.ambiente, fonte: 'Serpro (Situação Cadastral do CPF)' });
     }
     case 'nfe': {
       const chave = onlyNumbers(url.searchParams.get('chave') || '');
       if (chave.length !== 44) return err('Chave de acesso da NF-e inválida (44 dígitos).', 400, 'CHAVE_INVALIDA');
       const r = await serpro.consultarNfe(env, chave);
       if (!r.ok) return falha(r, `nfe ${chave} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_NFE', detalhe: chave, ip });
-      return ok({ nfe: r.data, fonte: 'Serpro - Consulta NF-e (Receita Federal)' });
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_NFE', detalhe: `${chave} ${r.ambiente}`, ip });
+      return ok({ resumo: normalizarNfeSerpro(r.data || {}), nfe: r.data, detalhes: r.data, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Consulta NF-e` });
     }
     case 'cnd': {
       const body = await readBody(request);
@@ -398,8 +623,14 @@ export async function handleSerpro(env, request) {
         gerarPdf: body.pdf === true || body.pdf === 'true',
       });
       if (!r.ok) return falha(r, `cnd ${contribuinte} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CND', detalhe: contribuinte, ip });
-      return ok({ certidao: r.data, fonte: 'Serpro - Certidão Negativa de Débitos (PGFN)' });
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CND', detalhe: `${contribuinte} ${r.ambiente}`, ip });
+      const cnd = normalizarCndSerpro(r.data || {});
+      const { pdfBase64, ...resumoCnd } = cnd;
+      const detalhes = { ...(r.data || {}) };
+      if (detalhes.Certidao && detalhes.Certidao.DocumentoPdf) {
+        detalhes.Certidao = { ...detalhes.Certidao, DocumentoPdf: `[PDF base64 · ${Math.round(detalhes.Certidao.DocumentoPdf.length / 1024)} KB · disponível para download]` };
+      }
+      return ok({ resumo: resumoCnd, temPdf: cnd.temPdf, pdfBase64, detalhes, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Certidão Negativa de Débitos (PGFN)` });
     }
     case 'due': {
       const numero = String(url.searchParams.get('numero') || '').trim().toUpperCase();
@@ -407,28 +638,31 @@ export async function handleSerpro(env, request) {
       if (!numero || !chave) return err('Informe o número e a chave de acesso da DUE.', 400, 'DUE_INVALIDO');
       const r = await serpro.consultarDue(env, numero, chave);
       if (!r.ok) return falha(r, `due ${numero} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_DUE', detalhe: numero, ip });
-      return ok({ due: r.data, fonte: 'Serpro - Declaração Única de Exportação (DUE)' });
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_DUE', detalhe: `${numero} ${r.ambiente}`, ip });
+      return ok({ resumo: normalizarDueSerpro(r.data || {}), due: r.data, detalhes: r.data, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Declaração Única de Exportação (DUE)` });
     }
-    case 'faturamento': {
-      const token = String(url.searchParams.get('token') || '').trim();
-      const niContratante = onlyNumbers(url.searchParams.get('contratante') || '');
-      if (!token) return err('Informe o token de autorização (e-CAC → Compartilha).', 400, 'TOKEN_INVALIDO');
-      if (niContratante.length !== 14) return err('CNPJ do contratante inválido.', 400, 'CNPJ_INVALIDO');
-      const r = await serpro.consultarFaturamento(env, token, niContratante);
-      if (!r.ok) return falha(r, `faturamento ${niContratante} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_FATURAMENTO', detalhe: niContratante, ip });
-      return ok({ faturamento: r.data, fonte: 'Serpro - Consulta Faturamento (Compartilha RFB)' });
-    }
+    case 'faturamento':
     case 'faturamento-autorizacoes': {
-      const niContratante = onlyNumbers(url.searchParams.get('contratante') || '');
-      const niTitularDados = onlyNumbers(url.searchParams.get('titular') || '');
-      if (niContratante.length !== 14) return err('CNPJ do contratante inválido.', 400, 'CNPJ_INVALIDO');
-      if (niTitularDados.length !== 11) return err('CPF do titular inválido.', 400, 'CPF_INVALIDO');
-      const r = await serpro.autorizacoesFaturamento(env, niContratante, niTitularDados);
-      if (!r.ok) return falha(r, `faturamento-autorizacoes ${niContratante} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_FATURAMENTO_AUTORIZACOES', detalhe: niContratante, ip });
-      return ok({ autorizacoes: r.data, fonte: 'Serpro - Autorizações de Faturamento (Compartilha RFB)' });
+      const tipo = url.searchParams.get('acao') === 'faturamento-autorizacoes' ? 'autorizacoes'
+        : (['consultar', 'autorizacoes'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'consultar');
+      let r;
+      if (tipo === 'autorizacoes') {
+        const niContratante = onlyNumbers(url.searchParams.get('contratante') || '');
+        const niTitularDados = onlyNumbers(url.searchParams.get('titular') || '');
+        if (niContratante.length !== 14) return err('CNPJ do contratante inválido.', 400, 'CNPJ_INVALIDO');
+        if (niTitularDados.length !== 11) return err('CPF do titular inválido.', 400, 'CPF_INVALIDO');
+        r = await serpro.autorizacoesFaturamento(env, niContratante, niTitularDados);
+      } else {
+        const token = String(url.searchParams.get('token') || '').trim();
+        const niContratante = onlyNumbers(url.searchParams.get('contratante') || '');
+        if (!token) return err('Informe o token de autorização (e-CAC → Compartilha).', 400, 'TOKEN_INVALIDO');
+        if (niContratante.length !== 14) return err('CNPJ do contratante inválido.', 400, 'CNPJ_INVALIDO');
+        r = await serpro.consultarFaturamento(env, token, niContratante);
+      }
+      if (!r.ok) return falha(r, `faturamento ${tipo} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_FATURAMENTO', detalhe: `${tipo} ${r.ambiente}`, ip });
+      const resumo = tipo === 'autorizacoes' ? normalizarAutorizacoesCompartilha(r.data || {}) : normalizarCompartilha(r.data || {});
+      return ok({ resumo, dados: tipo === 'autorizacoes' ? resumo : r.data, detalhes: r.data, tipo, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Consulta Faturamento (Compartilha RFB)` });
     }
     case 'compras': {
       const chaveCompra = String(url.searchParams.get('compra') || '').trim();
@@ -437,7 +671,7 @@ export async function handleSerpro(env, request) {
       const r = await serpro.comprasChat(env, chaveCompra, { diligencias });
       if (!r.ok) return falha(r, `compras ${chaveCompra} ${r.code || ''}`);
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_COMPRAS', detalhe: `${chaveCompra} ${diligencias ? 'diligencias' : 'chat'}`, ip });
-      return ok({ mensagens: r.data, fonte: `Serpro - Compras.gov.br (${diligencias ? 'diligências' : 'chat'})` });
+      return ok({ mensagens: r.data, detalhes: r.data, ambiente: r.ambiente, fonte: `Serpro - Compras.gov.br (${diligencias ? 'diligências' : 'chat'})` });
     }
     case 'contador': {
       const body = await readBody(request);
@@ -459,7 +693,7 @@ export async function handleSerpro(env, request) {
       const r = await serpro.carimboTempo(env, { base64, document: Array.isArray(body.document) ? body.document : undefined });
       if (!r.ok) return falha(r, `carimbo ${r.code || ''}`);
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CARIMBO', detalhe: base64.slice(0, 40), ip });
-      return ok({ verificacao: r.data, fonte: 'Serpro - Carimbo de Tempo (x-signature)' });
+      return ok({ verificacao: r.data, resumo: r.data, detalhes: r.data, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Carimbo de Tempo (x-signature)` });
     }
     case 'comex': {
       const body = await readBody(request);
@@ -492,8 +726,10 @@ export async function handleSerpro(env, request) {
       if (modo !== 'cpf' && (ni.length !== 14 || !isValidCnpj(ni))) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
       const r = await serpro.consultarCpfCnpj(env, modo, ni);
       if (!r.ok) return falha(r, `cartorio ${modo} ${ni} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CARTORIO', detalhe: `${ni} ${modo}`, ip });
-      return ok({ consulta: r.data, modo, fonte: 'Serpro - Cartório Data (Consulta CPF/CNPJ v2)' });
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CARTORIO', detalhe: `${ni} ${modo} ${r.ambiente}`, ip });
+      const d = r.data || {};
+      const resumo = modo === 'cpf' ? normalizarCpfSerpro(d) : normalizarCnpjSerpro(d);
+      return ok({ resumo, consulta: d, detalhes: d, modo, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Cartório Data (Consulta CPF/CNPJ v2)` });
     }
     case 'renda': {
       const tipo = ['consultar', 'autorizacoes', 'status'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'consultar';
@@ -512,8 +748,11 @@ export async function handleSerpro(env, request) {
         r = await serpro.rendaCpf(env, token);
       }
       if (!r.ok) return falha(r, `renda ${tipo} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_RENDA', detalhe: tipo, ip });
-      return ok({ renda: r.data, tipo, fonte: 'Serpro - Renda PF (Declaração IRPF)' });
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_RENDA', detalhe: `${tipo} ${r.ambiente}`, ip });
+      const resumo = tipo === 'autorizacoes' ? normalizarAutorizacoesCompartilha(r.data || {})
+        : tipo === 'status' ? { status: r.data }
+        : normalizarCompartilha(r.data || {});
+      return ok({ resumo, renda: r.data, detalhes: r.data, tipo, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Renda PF (Declaração IRPF)` });
     }
     case 'restituicao': {
       const tipo = ['consultar', 'autorizacoes', 'status'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'consultar';
@@ -532,8 +771,11 @@ export async function handleSerpro(env, request) {
         r = await serpro.restituicaoCpf(env, token);
       }
       if (!r.ok) return falha(r, `restituicao ${tipo} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_RESTITUICAO', detalhe: tipo, ip });
-      return ok({ restituicao: r.data, tipo, fonte: 'Serpro - Restituição IRPF' });
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_RESTITUICAO', detalhe: `${tipo} ${r.ambiente}`, ip });
+      const resumo = tipo === 'autorizacoes' ? normalizarAutorizacoesCompartilha(r.data || {})
+        : tipo === 'status' ? { status: r.data }
+        : normalizarCompartilha(r.data || {});
+      return ok({ resumo, restituicao: r.data, detalhes: r.data, tipo, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Restituição IRPF` });
     }
     case 'datavalid': {
       const body = await readBody(request);
@@ -555,7 +797,7 @@ export async function handleSerpro(env, request) {
       const r = await serpro.datavalidValidar(env, { cpf, privacidade, validacao });
       if (!r.ok) return falha(r, `datavalid ${cpf} ${r.code || ''}`);
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_DATAVALID', detalhe: cpf, ip });
-      return ok({ validacao: r.data, fonte: 'Serpro - Datavalid v5 (validação de identidade)' });
+      return ok({ validacao: r.data, resumo: r.data, detalhes: r.data, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Datavalid v5 (validação de identidade)` });
     }
     case 'datavalid-status': {
       const r = await serpro.datavalidStatus(env);
@@ -582,34 +824,107 @@ export async function handleSerpro(env, request) {
       return ok({ biovalid: r.data, servico, fonte: `Serpro - BioValid (${servico === 'liveness' ? 'prova de vida' : 'token'})` });
     }
     case 'antecipa': {
-      const tipo = ['avaliacao', 'contratos', 'ordembancaria', 'cotacoes', 'proposta'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'avaliacao';
+      // Antecipa Gov — Portal de Operações (somente LEITURA; mutações ficam fora do IANF)
+      const tipo = ['cotacoes', 'proposta', 'contrato', 'dadosbasicos', 'situacaonivel', 'regularidade', 'ocorrencias', 'historico', 'arquivo'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'cotacoes';
       const id = String(url.searchParams.get('id') || '').trim();
+      const ident = onlyNumbers(url.searchParams.get('ni') || '');
+      const uasg = String(url.searchParams.get('uasg') || '').trim();
+      const contrato = String(url.searchParams.get('contrato') || '').trim();
+      const nivel = ['detalhada', 'nadaconsta', 'impeditivasindiretas'].includes(url.searchParams.get('nivel')) ? url.searchParams.get('nivel') : 'detalhada';
+      let sub;
+      if (tipo === 'cotacoes') sub = '/v2/cotacoesdisponiveis';
+      else if (tipo === 'proposta') { if (!id) return err('Informe o ID da cotação.', 400, 'ID_INVALIDO'); sub = `/v2/cotacao/${encodeURIComponent(id)}/proposta`; }
+      else if (tipo === 'contrato') { if (!id || !contrato || !uasg) return err('Informe cotação, UASG e número do contrato.', 400, 'ID_INVALIDO'); sub = `/v2/cotacao/${encodeURIComponent(id)}/contrato/${encodeURIComponent(contrato)}/${encodeURIComponent(uasg)}`; }
+      else if (tipo === 'arquivo') { if (!id) return err('Informe o código do arquivo.', 400, 'ID_INVALIDO'); sub = `/v2/arquivo/${encodeURIComponent(id)}`; }
+      else {
+        if (!ident) return err('Informe o CPF/CNPJ do fornecedor (identificador).', 400, 'NI_INVALIDO');
+        if (tipo === 'dadosbasicos') sub = `/v2/dadosbasicos/${ident}`;
+        else if (tipo === 'situacaonivel') sub = `/v2/dadossituacaonivel/${ident}`;
+        else if (tipo === 'regularidade') sub = `/v2/regularidadefiscalfinanceira/${ident}`;
+        else if (tipo === 'ocorrencias') sub = `/v2/ocorrencias/${nivel}/${ident}`;
+        else sub = `/v2/historicofornecedor/${ident}`;
+      }
+      const r = await serpro.antecipaLer(env, sub);
+      if (!r.ok) return falha(r, `antecipa ${tipo} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_ANTECIPA', detalhe: `${tipo} ${r.ambiente}`, ip });
+      return ok({ resumo: r.data, antecipa: r.data, detalhes: r.data, tipo, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Antecipa Gov (Portal de Operações)` });
+    }
+    case 'pilar': {
+      // Antecipa Gov — PILAR (fornecedor / UASG), somente LEITURA
+      const tipo = ['avaliacao', 'contratos', 'ordembancaria', 'cotacao', 'documento', 'cronograma', 'empenhos', 'faturas', 'historico', 'itens', 'empenho', 'operacoes', 'operacao'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'avaliacao';
+      const id = String(url.searchParams.get('id') || '').trim();
+      const uasg = String(url.searchParams.get('uasg') || '').trim();
+      const contrato = String(url.searchParams.get('contrato') || '').trim();
       let sub;
       if (tipo === 'avaliacao') {
         const ni = onlyNumbers(url.searchParams.get('ni') || '');
         if (ni.length !== 11 && ni.length !== 14) return err('Informe um CPF (11) ou CNPJ (14) do fornecedor.', 400, 'NI_INVALIDO');
         if (ni.length === 11 && !isValidCpf(ni)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
         if (ni.length === 14 && !isValidCnpj(ni)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
-        sub = `/avaliacao/fornecedor/${ni}`;
-      } else if (tipo === 'cotacoes') {
-        sub = '/v2/cotacoesdisponiveis';
+        sub = `/v2/avaliacao/fornecedor/${ni}`;
+      } else if (tipo === 'contratos') {
+        if (!id) return err('Informe o ID do contrato.', 400, 'ID_INVALIDO');
+        sub = `/v2/execucoes/contratos/${encodeURIComponent(id)}`;
+      } else if (tipo === 'ordembancaria') {
+        if (!id) return err('Informe o ID de apropriação da ordem bancária.', 400, 'ID_INVALIDO');
+        sub = `/v2/ordembancaria/consultar/${encodeURIComponent(id)}`;
+      } else if (tipo === 'operacoes') {
+        sub = '/v2/operacao-credito';
+      } else if (tipo === 'operacao') {
+        if (!id) return err('Informe o ID da operação de crédito.', 400, 'ID_INVALIDO');
+        sub = `/v2/operacao-credito/${encodeURIComponent(id)}`;
       } else {
-        if (!id) return err('Informe o ID.', 400, 'ID_INVALIDO');
-        if (tipo === 'contratos') sub = `/execucoes/contratos/${encodeURIComponent(id)}`;
-        else if (tipo === 'ordembancaria') sub = `/ordembancaria/consultar/${encodeURIComponent(id)}`;
-        else sub = `/cotacao/${encodeURIComponent(id)}/proposta`;
+        if (!id || !uasg) return err('Informe a cotação e a UASG.', 400, 'ID_INVALIDO');
+        const base = `/v2/cotacao/${encodeURIComponent(id)}/uasg/${encodeURIComponent(uasg)}`;
+        if (tipo === 'cotacao' || tipo === 'documento' || tipo === 'cronograma' || tipo === 'empenhos' || tipo === 'faturas' || tipo === 'historico' || tipo === 'itens') {
+          if (!contrato) return err('Informe o número do contrato.', 400, 'ID_INVALIDO');
+          sub = `${base}/contrato/${encodeURIComponent(contrato)}${tipo === 'cotacao' ? '' : `/${tipo}`}`;
+        } else {
+          if (!contrato) return err('Informe o número do empenho.', 400, 'ID_INVALIDO');
+          sub = `${base}/empenho/${encodeURIComponent(contrato)}`;
+        }
       }
-      const r = await serpro.antecipaLer(env, sub);
-      if (!r.ok) return falha(r, `antecipa ${tipo} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_ANTECIPA', detalhe: tipo, ip });
-      return ok({ antecipa: r.data, tipo, fonte: 'Serpro - Antecipa Gov (consulta)' });
+      const r = await serpro.pilarLer(env, sub);
+      if (!r.ok) return falha(r, `pilar ${tipo} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_PILAR', detalhe: `${tipo} ${r.ambiente}`, ip });
+      return ok({ resumo: r.data, pilar: r.data, detalhes: r.data, tipo, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - Antecipa Gov (PILAR)` });
+    }
+    case 'ccir': {
+      // CCIR - Certificado de Cadastro de Imóvel Rural (INCRA)
+      const tipo = ['codigo', 'ni', 'emitir', 'status'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'ni';
+      let r;
+      if (tipo === 'status') {
+        r = await serpro.ccirStatus(env);
+      } else if (tipo === 'ni') {
+        const ni = onlyNumbers(url.searchParams.get('ni') || '');
+        if (ni.length !== 11 && ni.length !== 14) return err('Informe um CPF (11) ou CNPJ (14) do titular do imóvel rural.', 400, 'NI_INVALIDO');
+        r = await serpro.ccirPorNi(env, ni);
+      } else {
+        const codigo = String(url.searchParams.get('codigo') || '').trim().toUpperCase();
+        if (!codigo) return err('Informe o código do imóvel (11 dígitos, INCRA).', 400, 'CODIGO_INVALIDO');
+        r = tipo === 'emitir' ? await serpro.ccirEmitir(env, encodeURIComponent(codigo)) : await serpro.ccirPorCodigo(env, encodeURIComponent(codigo));
+      }
+      if (!r.ok) return falha(r, `ccir ${tipo} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CCIR', detalhe: `${tipo} ${r.ambiente}`, ip });
+      const resumo = tipo === 'codigo' || tipo === 'emitir' ? normalizarCcir(r.data || {}) : r.data;
+      return ok({ resumo, ccir: r.data, detalhes: r.data, tipo, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - CCIR (INCRA)` });
+    }
+    case 'nfe-escalonada': {
+      const chave = onlyNumbers(url.searchParams.get('chave') || '');
+      if (chave.length !== 44) return err('Chave de acesso da NF-e inválida (44 dígitos).', 400, 'CHAVE_INVALIDA');
+      const r = await serpro.nfeEscalonadaConsultar(env, chave);
+      if (!r.ok) return falha(r, `nfe-escalonada ${chave} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_NFE_ESCALONADA', detalhe: chave, ip });
+      return ok({ resumo: r.data, nfe: r.data, detalhes: r.data, ambiente: r.ambiente, fonte: 'Serpro - NF-e Escalonada (processamento em lote)' });
     }
     case 'nfe-push': {
-      const tipo = ['status', 'listar', 'criar', 'excluir'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'status';
+      const tipo = ['status', 'listar', 'criar', 'excluir', 'clientes'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'status';
       const body = await readBody(request);
       let r;
       if (tipo === 'status') {
         r = await serpro.nfeStatus(env);
+      } else if (tipo === 'clientes') {
+        r = await serpro.nfePushClientes(env);
       } else if (tipo === 'listar') {
         r = await serpro.nfePushListar(env);
       } else if (tipo === 'excluir') {
@@ -623,20 +938,16 @@ export async function handleSerpro(env, request) {
         r = await serpro.nfePushCriar(env, chaves);
       }
       if (!r.ok) return falha(r, `nfe-push ${tipo} ${r.code || ''}`);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_NFE_PUSH', detalhe: tipo, ip });
-      return ok({ push: r.data, tipo, fonte: `Serpro - NF-e push (${tipo})` });
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_NFE_PUSH', detalhe: `${tipo} ${r.ambiente}`, ip });
+      return ok({ resumo: r.data, push: r.data, detalhes: r.data, tipo, ambiente: r.ambiente, fonte: `${r.ambiente === 'demo' ? 'Serpro · demonstração' : 'Serpro'} - NF-e push (${tipo})` });
     }
     case 'divida-ativa': {
       const ni = onlyNumbers(url.searchParams.get('ni') || '');
       // A base de demonstração da PGFN usa CPFs/CNPJs fictícios; vale só o formato (dígitos).
       if (ni.length !== 11 && ni.length !== 14) return err('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).', 400, 'NI_INVALIDO');
-      let r = await serpro.consultarDividaAtiva(env, ni);
-      let origem = 'prod';
-      if (!r.ok && env.SERPRO_TRIAL_TOKEN && r.code !== 'SERPRO_TOKEN_EXPIRADO') {
-        r = await serpro.dividaTrialDevedor(env, ni);
-        origem = 'trial';
-      }
+      const r = await serpro.consultarDividaAtiva(env, ni);
       if (!r.ok) return falha(r, `divida-ativa ${ni} ${r.code || ''}`);
+      const origem = r.ambiente === 'demo' ? 'trial' : 'prod';
       const inscricoes = normalizarInscricoes(r.data || {});
       const ativas = inscricoes.filter((i) => String(i.situacao).toUpperCase() !== 'EXTINTA');
       const total = ativas.reduce((s, i) => s + i.valor, 0);
@@ -646,6 +957,7 @@ export async function handleSerpro(env, request) {
         situacao: inscricoes.length === 0 ? 'sem_registros' : ativas.length === 0 ? 'regular' : 'com_debitos',
         totalConsolidado: total,
         inscricoes,
+        detalhes: r.data,
         ambiente: origem,
         fonte: origem === 'trial'
           ? 'PGFN / Serpro - Dívida Ativa (ambiente de demonstração)'
@@ -655,13 +967,9 @@ export async function handleSerpro(env, request) {
     case 'divida-inscricao': {
       const numero = onlyNumbers(url.searchParams.get('numero') || '');
       if (numero.length < 6 || numero.length > 20) return err('Informe o número da inscrição (somente dígitos).', 400, 'INSCRICAO_INVALIDA');
-      let r = await serpro.consultarInscricao(env, numero);
-      let origem = 'prod';
-      if (!r.ok && env.SERPRO_TRIAL_TOKEN && r.code !== 'SERPRO_TOKEN_EXPIRADO') {
-        r = await serpro.dividaTrialInscricao(env, numero);
-        origem = 'trial';
-      }
+      const r = await serpro.consultarInscricao(env, numero);
       if (!r.ok) return falha(r, `divida-inscricao ${numero} ${r.code || ''}`);
+      const origem = r.ambiente === 'demo' ? 'trial' : 'prod';
       const raw = r.data || {};
       const d = Array.isArray(raw) ? (raw[0] || {}) : raw;
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_DIVIDA_INSCRICAO', detalhe: `${numero} ${origem}`, ip });
@@ -702,29 +1010,32 @@ export async function handleSerpro(env, request) {
       return ok({
         serpro: 'online',
         lojaUrl: SERPRO_LOJA,
+        demonstracao: Boolean(env.SERPRO_TRIAL_TOKEN),
         servicos: [
-          { acao: 'cnpj', nome: 'Consulta CNPJ (basica/qsa/empresa)' },
+          { acao: 'cnpj', nome: 'Consulta CNPJ v2 (basica/qsa/empresa)' },
           { acao: 'cpf', nome: 'Consulta CPF v3 (Receita Federal)' },
           { acao: 'situacao-cpf', nome: 'Situação Cadastral do CPF' },
           { acao: 'divida-ativa', nome: 'Dívida Ativa da União (PGFN)' },
           { acao: 'divida-inscricao', nome: 'Inscrição da Dívida Ativa (número)' },
           { acao: 'nfe', nome: 'Consulta NF-e (chave de acesso)' },
-          { acao: 'cnd', nome: 'Certidão Negativa de Débitos (CND)' },
+          { acao: 'nfe-escalonada', nome: 'NF-e Escalonada (lote)' },
+          { acao: 'nfe-push', nome: 'NF-e push (status/clientes/listar/criar/excluir)' },
+          { acao: 'cnd', nome: 'Certidão Negativa de Débitos (CND + PDF)' },
           { acao: 'due', nome: 'Declaração Única de Exportação (DUE)' },
-          { acao: 'faturamento', nome: 'Consulta Faturamento (Compartilha RFB)' },
-          { acao: 'faturamento-autorizacoes', nome: 'Autorizações de Faturamento' },
+          { acao: 'faturamento', nome: 'Faturamento (Consultar/Autorizações - Compartilha RFB)' },
           { acao: 'compras', nome: 'Compras.gov.br (chat/diligências)' },
           { acao: 'contador', nome: 'Integra Contador (procuração e-CAC)' },
           { acao: 'carimbo', nome: 'Carimbo de Tempo (verificação x-signature)' },
           { acao: 'comex', nome: 'Integra Comex (contêiner/presença/habilitação)' },
           { acao: 'cartorio', nome: 'Cartório Data (Consulta CPF/CNPJ v2)' },
-          { acao: 'renda', nome: 'Renda PF (Declaração IRPF - Compartilha)' },
-          { acao: 'restituicao', nome: 'Restituição do IRPF' },
+          { acao: 'ccir', nome: 'CCIR - Imóvel Rural (INCRA)' },
+          { acao: 'renda', nome: 'Renda PF (Consultar/Autorizações/status)' },
+          { acao: 'restituicao', nome: 'Restituição IRPF (Consultar/Autorizações/status)' },
           { acao: 'datavalid', nome: 'Datavalid v5 (validação de identidade)' },
           { acao: 'datavalid-status', nome: 'Datavalid v5 (status)' },
           { acao: 'biovalid', nome: 'BioValid (biometria facial)' },
-          { acao: 'antecipa', nome: 'Antecipa Gov (consultas)' },
-          { acao: 'nfe-push', nome: 'NF-e push (monitoramento de chaves)' },
+          { acao: 'antecipa', nome: 'Antecipa Gov - Portal (cotações/propostas/fornecedor)' },
+          { acao: 'pilar', nome: 'Antecipa Gov - PILAR (avaliação/contratos/UASG)' },
           { acao: 'ia', nome: 'Serpro IA (análise fiscal)' },
         ],
       });
