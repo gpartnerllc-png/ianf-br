@@ -273,6 +273,30 @@ export async function handleZapsignVerificar(env, request) {
 
 const SERPRO_LOJA = 'https://loja.serpro.gov.br';
 
+// Serpro devolve valores em formato pt-BR ("2.403,59") — Number() direto daria NaN
+function moedaBr(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  let s = String(v ?? '').replace(/[^\d.,-]/g, '');
+  if (!s) return 0;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizarInscricoes(d) {
+  const raw = Array.isArray(d) ? d : d.inscricoes || d.listaInscricoes || d.dividasAtivas || d.data || [];
+  return (Array.isArray(raw) ? raw : [raw].filter(Boolean)).map((i) => ({
+    numero: i.numeroInscricao || i.inscricao || '',
+    situacao: i.situacaoDescricao || i.situacao || '',
+    origem: i.origemDebito || i.orgaoOrigem || i.origem || i.descricaoOrigem || '',
+    valor: moedaBr(i.valorTotalConsolidadoMoeda || i.valorConsolidado || 0),
+    dataInscricao: i.dataInscricao || '',
+    devedor: i.nomeDevedor || '',
+    unidade: i.nomeUnidade || i.nomePFNResponsavel || '',
+    processo: i.numeroProcesso || i.processoAdministrativo || '',
+  }));
+}
+
 export async function handleSerpro(env, request) {
   const auth = await requireAuth(env, request);
   if (auth.error) return auth.error;
@@ -604,29 +628,60 @@ export async function handleSerpro(env, request) {
     }
     case 'divida-ativa': {
       const ni = onlyNumbers(url.searchParams.get('ni') || '');
+      // A base de demonstração da PGFN usa CPFs/CNPJs fictícios; vale só o formato (dígitos).
       if (ni.length !== 11 && ni.length !== 14) return err('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).', 400, 'NI_INVALIDO');
-      if (ni.length === 11 && !isValidCpf(ni)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
-      if (ni.length === 14 && !isValidCnpj(ni)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
-      const r = await serpro.consultarDividaAtiva(env, ni);
+      let r = await serpro.consultarDividaAtiva(env, ni);
+      let origem = 'prod';
+      if (!r.ok && env.SERPRO_TRIAL_TOKEN && r.code !== 'SERPRO_TOKEN_EXPIRADO') {
+        r = await serpro.dividaTrialDevedor(env, ni);
+        origem = 'trial';
+      }
       if (!r.ok) return falha(r, `divida-ativa ${ni} ${r.code || ''}`);
-      const d = r.data || {};
-      const raw = Array.isArray(d) ? d : d.inscricoes || d.listaInscricoes || d.data || [];
-      const inscricoes = (Array.isArray(raw) ? raw : []).map((i) => ({
-        numero: i.numeroInscricao || i.inscricao || '',
-        situacao: i.situacaoDescricao || i.situacao || '',
-        origem: i.origemDebito || i.origem || i.descricaoOrigem || '',
-        valor: Number(i.valorTotalConsolidadoMoeda || i.valorConsolidado || 0),
-        dataInscricao: i.dataInscricao || '',
-      }));
+      const inscricoes = normalizarInscricoes(r.data || {});
       const ativas = inscricoes.filter((i) => String(i.situacao).toUpperCase() !== 'EXTINTA');
       const total = ativas.reduce((s, i) => s + i.valor, 0);
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_DIVIDA_ATIVA', detalhe: ni, ip });
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_DIVIDA_ATIVA', detalhe: `${ni} ${origem}`, ip });
       return ok({
         ni,
         situacao: inscricoes.length === 0 ? 'sem_registros' : ativas.length === 0 ? 'regular' : 'com_debitos',
         totalConsolidado: total,
         inscricoes,
-        fonte: 'PGFN / Serpro - Dívida Ativa da União',
+        ambiente: origem,
+        fonte: origem === 'trial'
+          ? 'PGFN / Serpro - Dívida Ativa (ambiente de demonstração)'
+          : 'PGFN / Serpro - Dívida Ativa da União',
+      });
+    }
+    case 'divida-inscricao': {
+      const numero = onlyNumbers(url.searchParams.get('numero') || '');
+      if (numero.length < 6 || numero.length > 20) return err('Informe o número da inscrição (somente dígitos).', 400, 'INSCRICAO_INVALIDA');
+      let r = await serpro.consultarInscricao(env, numero);
+      let origem = 'prod';
+      if (!r.ok && env.SERPRO_TRIAL_TOKEN && r.code !== 'SERPRO_TOKEN_EXPIRADO') {
+        r = await serpro.dividaTrialInscricao(env, numero);
+        origem = 'trial';
+      }
+      if (!r.ok) return falha(r, `divida-inscricao ${numero} ${r.code || ''}`);
+      const raw = r.data || {};
+      const d = Array.isArray(raw) ? (raw[0] || {}) : raw;
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_DIVIDA_INSCRICAO', detalhe: `${numero} ${origem}`, ip });
+      return ok({
+        inscricao: {
+          numero: d.inscricao || d.numeroInscricao || numero,
+          situacao: d.situacao || d.situacaoDescricao || '',
+          origem: d.orgaoOrigem || d.nomeNaturezaReceita || d.nomeReceita || '',
+          dataInscricao: d.dataInscricao || '',
+          valorTotalInscrito: moedaBr(d.valorTotalInscritoMoeda),
+          valorConsolidado: moedaBr(d.valorTotalConsolidadoMoeda),
+          valorRemanescente: moedaBr(d.valorRemanescenteMoeda),
+          processo: d.processoAdministrativo || d.numeroProcessoJudicial || '',
+          unidade: d.nomePFNResponsavel || d.nomeUnidade || '',
+        },
+        detalhes: d,
+        ambiente: origem,
+        fonte: origem === 'trial'
+          ? 'PGFN / Serpro - Inscrição da Dívida Ativa (ambiente de demonstração)'
+          : 'PGFN / Serpro - Inscrição da Dívida Ativa',
       });
     }
     case 'ia': {
@@ -652,6 +707,7 @@ export async function handleSerpro(env, request) {
           { acao: 'cpf', nome: 'Consulta CPF v3 (Receita Federal)' },
           { acao: 'situacao-cpf', nome: 'Situação Cadastral do CPF' },
           { acao: 'divida-ativa', nome: 'Dívida Ativa da União (PGFN)' },
+          { acao: 'divida-inscricao', nome: 'Inscrição da Dívida Ativa (número)' },
           { acao: 'nfe', nome: 'Consulta NF-e (chave de acesso)' },
           { acao: 'cnd', nome: 'Certidão Negativa de Débitos (CND)' },
           { acao: 'due', nome: 'Declaração Única de Exportação (DUE)' },

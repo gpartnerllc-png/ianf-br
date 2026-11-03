@@ -25,7 +25,7 @@ function iamBase(env) {
 async function obterToken(env) {
   if (env.SERASA_CLIENT_ID && env.SERASA_CLIENT_SECRET) {
     try {
-      const cached = await env.CACHE.get('serasa:token');
+      const cached = await env.KV.get('serasa:token');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed.token && parsed.exp > Date.now() + 60_000) return parsed.token;
@@ -39,7 +39,7 @@ async function obterToken(env) {
       const data = await res.json().catch(() => null);
       if (res.ok && data?.access_token) {
         const ttl = Math.max(60, Number(data.expires_in || 3600) - 120);
-        await env.CACHE.put('serasa:token', JSON.stringify({ token: data.access_token, exp: Date.now() + ttl * 1000 }), { expirationTtl: ttl }).catch(() => {});
+        await env.KV.put('serasa:token', JSON.stringify({ token: data.access_token, exp: Date.now() + ttl * 1000 }), { expirationTtl: ttl }).catch(() => {});
         return data.access_token;
       }
       const item = Array.isArray(data) ? data[0] : data;
@@ -69,7 +69,7 @@ async function post(env, path, body, retry = true) {
       const msg = item?.message || item?.fault?.faultstring || `Serasa respondeu ${res.status}`;
       const code = item?.code ? String(item.code) : String(res.status);
       if ((res.status === 401 || code === '17') && retry && env.SERASA_CLIENT_ID) {
-        await env.CACHE.delete('serasa:token').catch(() => {});
+        await env.KV.delete('serasa:token').catch(() => {});
         return post(env, path, body, false);
       }
       if (res.status === 401 || code === '17') {

@@ -1336,6 +1336,7 @@ const SERPRO_SERVICOS = {
   nfe: { main: true, ph: 'Chave de acesso da NF-e (44 dígitos)' },
   cnd: { main: true, ph: 'CPF ou CNPJ do contribuinte', extras: [['tipo', 'select', [['2', 'Pessoa Jurídica'], ['1', 'Pessoa Física'], ['3', 'NIRF']]], ['pdf', 'check', 'Gerar certidão em PDF']] },
   'divida-ativa': { main: true, ph: 'CPF ou CNPJ' },
+  'divida-inscricao': { main: true, ph: 'Número da inscrição (ex.: 9061700096419)' },
   faturamento: { main: false, extras: [['token', 'input', 'Token de autorização (e-CAC → Compartilha)'], ['contratante', 'input', 'CNPJ do contratante (14 dígitos)']] },
   'faturamento-autorizacoes': { main: false, extras: [['contratante', 'input', 'CNPJ do contratante (14 dígitos)'], ['titular', 'input', 'CPF do titular dos dados (11 dígitos)']] },
   due: { main: false, extras: [['numero', 'input', 'Número da DUE (ex.: 18BR0000133506)'], ['chave', 'input', 'Chave de acesso da DUE (ex.: 18ERM135006)']] },
@@ -1633,16 +1634,40 @@ async function consultarSerpro() {
         sem_registros: ['tag-rascunho', 'Sem registros'],
       };
       const [tagCls, tagTxt] = tags[data.situacao] || ['tag-rascunho', data.situacao];
+      const trialBadge = data.ambiente === 'trial' ? '<span class="tag tag-rascunho">demonstração</span>' : '';
       const rows = (data.inscricoes || []).map((i) => `
-        <div class="kv"><span>${ddEsc(i.origem || 'Inscrição ' + i.numero)}${i.numero ? ' · ' + ddEsc(i.numero) : ''}</span><b>${ddEsc(String(i.situacao || '—'))} — ${fmt(i.valor)}</b></div>`).join('');
+        <div class="kv"><span>${ddEsc(i.origem || 'Inscrição ' + i.numero)}${i.numero ? ' · ' + ddEsc(i.numero) : ''}${i.devedor ? ' · ' + ddEsc(i.devedor) : ''}</span><b>${ddEsc(String(i.situacao || '—'))} — ${fmt(i.valor)}</b></div>`).join('');
       el.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <h4>Dívida Ativa da União</h4>
+          <h4>Dívida Ativa da União ${trialBadge}</h4>
           <span class="tag ${tagCls}">${tagTxt}</span>
         </div>
         <p class="muted small">${ddEsc(data.fonte || '')}</p>
         <div class="kv"><span>Total consolidado</span><b>${fmt(data.totalConsolidado)}</b></div>
         ${rows || '<p class="muted small">Nenhuma inscrição retornada.</p>'}`;
+      return;
+    }
+
+    if (svc === 'divida-inscricao') {
+      if (valor.length < 6) {
+        el.innerHTML = '<p class="form-error">Informe o número da inscrição (somente dígitos).</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=divida-inscricao&numero=${valor}`);
+      const i = data.inscricao || {};
+      const trialBadge = data.ambiente === 'trial' ? '<span class="tag tag-rascunho">demonstração</span>' : '';
+      el.innerHTML = `
+        <h4>Inscrição ${ddEsc(String(i.numero || valor))} ${trialBadge}</h4>
+        <p class="muted small">${ddEsc(data.fonte || '')}</p>
+        <div class="kv"><span>Situação</span><b>${ddEsc(String(i.situacao || '—'))}</b></div>
+        <div class="kv"><span>Órgão de origem</span><b>${ddEsc(String(i.origem || '—'))}</b></div>
+        <div class="kv"><span>Data da inscrição</span><b>${ddEsc(String(i.dataInscricao || '—'))}</b></div>
+        <div class="kv"><span>Valor inscrito</span><b>${fmt(i.valorTotalInscrito || 0)}</b></div>
+        <div class="kv"><span>Valor consolidado</span><b>${fmt(i.valorConsolidado || 0)}</b></div>
+        <div class="kv"><span>Valor remanescente</span><b>${fmt(i.valorRemanescente || 0)}</b></div>
+        ${i.processo ? `<div class="kv"><span>Processo</span><b>${ddEsc(String(i.processo))}</b></div>` : ''}
+        ${i.unidade ? `<div class="kv"><span>PFN responsável</span><b>${ddEsc(String(i.unidade))}</b></div>` : ''}
+        <details class="mt-3"><summary class="small muted">Retorno completo</summary>${ddBloque(data.detalhes)}</details>`;
       return;
     }
 

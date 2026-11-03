@@ -17,7 +17,7 @@ let tokenMem = null;
 async function obterToken(env, forcar = false) {
   if (!forcar) {
     if (tokenMem && tokenMem.exp > Date.now()) return tokenMem.token;
-    const cached = await env.CACHE.get(TOKEN_KEY).catch(() => null);
+    const cached = await env.KV.get(TOKEN_KEY).catch(() => null);
     if (cached) {
       try {
         const c = JSON.parse(cached);
@@ -43,7 +43,7 @@ async function obterToken(env, forcar = false) {
     if (!token) return null;
     const ttl = Math.max(60, (Number(data.expires_in) || 300) - 120);
     tokenMem = { token, exp: Date.now() + ttl * 1000 };
-    await env.CACHE.put(TOKEN_KEY, JSON.stringify(tokenMem), { expirationTtl: ttl }).catch(() => {});
+    await env.KV.put(TOKEN_KEY, JSON.stringify(tokenMem), { expirationTtl: ttl }).catch(() => {});
     return token;
   } catch {
     return null;
@@ -200,15 +200,27 @@ export const serpro = {
   },
   // Dívida Ativa da União (PGFN via Serpro) - API oficial do catálogo gov.br Conecta
   // Contrato: https://www.loja.serpro.gov.br/consulta-divida-ativa
-  // Endpoint configurável via env SERPRO_DIVIDA_PATH
+  // Docs: https://apicenter.estaleiro.serpro.gov.br/documentacao/consulta-divida-ativa/pt/
+  // Prod: GET {base}/devedor/{cpf|cnpj} (base default /consulta-divida-ativa-df/api/v1, env SERPRO_DIVIDA_PATH)
   consultarDividaAtiva: async (env, ni) => {
-    const path = env.SERPRO_DIVIDA_PATH || '/consulta-divida-ativa-df/api/v1/divida-ativa';
-    let r = await serproRequest(env, path, { method: 'POST', body: { ni } });
+    const base = env.SERPRO_DIVIDA_PATH || '/consulta-divida-ativa-df/api/v1';
+    let r = await serproRequest(env, `${base}/devedor/${ni}`);
     if (!r.ok && (r.status === 404 || r.status === 405)) {
-      r = await serproRequest(env, `${path}/${ni}`, { method: 'GET' });
+      r = await serproRequest(env, `${base}/divida-ativa`, { method: 'POST', body: { ni } });
     }
     return r;
   },
+  // Inscrição da Dívida Ativa pelo número (prod)
+  consultarInscricao: (env, numero) => {
+    const base = env.SERPRO_DIVIDA_PATH || '/consulta-divida-ativa-df/api/v1';
+    return serproRequest(env, `${base}/inscricao/${numero}`);
+  },
+  // Dívida Ativa - ambiente de DEMONSTRAÇÃO (trial) com a chave pública das docs.
+  // Requer secret SERPRO_TRIAL_TOKEN; sem ele cai no OAuth2 normal (403 sem assinatura).
+  dividaTrialDevedor: (env, ni) =>
+    trialRequest(env, `${env.SERPRO_DIVIDA_TRIAL_PATH || '/consulta-divida-ativa-trial/api/v1'}/devedor/${ni}`),
+  dividaTrialInscricao: (env, numero) =>
+    trialRequest(env, `${env.SERPRO_DIVIDA_TRIAL_PATH || '/consulta-divida-ativa-trial/api/v1'}/inscricao/${numero}`),
   // Serpro IA - análise e inteligência sobre dados fiscais
   // (endpoint configurável via env SERPRO_IA_PATH, ex.: /ia/v1/chat)
   ia: (env, { prompt, contexto }) =>
