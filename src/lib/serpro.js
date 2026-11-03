@@ -1,4 +1,5 @@
-// Cliente Serpro - APIs governamentais oficiais (PIN: CPF/CNPJ; Dívida Ativa; Serpro IA)
+// Cliente Serpro - APIs governamentais oficiais
+// CNPJ v2 · CPF v3 · NF-e · CND · DUE · Faturamento · Compras · Integra Contador · Carimbo de Tempo · Integra Comex · Dívida Ativa · Serpro IA
 // Requer assinatura ativa no portal: https://loja.serpro.gov.br
 // Credenciais via secrets: SERPRO_CONSUMER_KEY / SERPRO_CONSUMER_SECRET
 // Token OAuth2 renovado automaticamente (cache em KV 'serpro:token')
@@ -48,7 +49,7 @@ async function obterToken(env, forcar = false) {
   }
 }
 
-async function serproRequest(env, path, { method = 'GET', body = null } = {}) {
+async function serproRequest(env, path, { method = 'GET', body = null, headers = {} } = {}) {
   if (!serproEnabled(env)) {
     return { ok: false, code: 'SERPRO_NAO_CONFIGURADO', message: 'Serpro não configurado. Contrate o serviço em loja.serpro.gov.br e defina os secrets SERPRO_CONSUMER_KEY e SERPRO_CONSUMER_SECRET.' };
   }
@@ -56,7 +57,7 @@ async function serproRequest(env, path, { method = 'GET', body = null } = {}) {
   if (!token) return { ok: false, code: 'SERPRO_AUTH', message: 'Falha ao autenticar no Serpro. Verifique as credenciais.' };
   const opts = {
     method,
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...headers },
   };
   if (body) {
     opts.headers['Content-Type'] = 'application/json';
@@ -88,15 +89,84 @@ async function serproRequest(env, path, { method = 'GET', body = null } = {}) {
 }
 
 export const serpro = {
-  // Consulta CNPJ (dados completos da Receita via Serpro PIN)
-  consultarCnpj: (env, cnpj) =>
-    serproRequest(env, `/consulta-cnpj-df/v2/basica/${cnpj}`),
-  // Consulta CPF (Serpro PIN)
-  consultarCpf: (env, cpf) =>
-    serproRequest(env, `/consulta-cpf-df-trial/v1/cpf/${cpf}`),
-  // Consulta situação do CPF na Receita
-  situacaoCpf: (env, cpf) =>
-    serproRequest(env, `/consulta-cpf-df-trial/v1/status/${cpf}`),
+  // Consulta CNPJ v2 (basica | qsa | empresa)
+  consultarCnpj: (env, cnpj, modo = 'basica') => {
+    const base = env.SERPRO_CNPJ_PATH || '/consulta-cnpj-df/v2';
+    const m = ['basica', 'qsa', 'empresa'].includes(modo) ? modo : 'basica';
+    return serproRequest(env, `${base}/${m}/${cnpj}`);
+  },
+  // Consulta CPF v3 (ni + nascimento ddmmaaaa)
+  consultarCpf: (env, cpf, nasc = '') =>
+    serproRequest(env, `${env.SERPRO_CPF_PATH || '/consulta-cpf-df/v3'}/cpf/${cpf}/${nasc}`),
+  // Situação do CPF = mesma consulta v3 (o retorno traz situacao{codigo,descricao})
+  situacaoCpf: (env, cpf, nasc = '') =>
+    serproRequest(env, `${env.SERPRO_CPF_PATH || '/consulta-cpf-df/v3'}/cpf/${cpf}/${nasc}`),
+  // Consulta NF-e pela chave de acesso (44 dígitos)
+  consultarNfe: (env, chave) =>
+    serproRequest(env, `${env.SERPRO_NFE_PATH || '/consulta-nfe-df/api/v1'}/nfe/${chave}`),
+  // CND - Certidão Negativa de Débitos (PGFN)
+  consultarCnd: (env, { tipoContribuinte, contribuinte, codigoIdentificacao, gerarPdf = false }) =>
+    serproRequest(env, `${env.SERPRO_CND_PATH || '/consulta-cnd/v1'}/certidao`, {
+      method: 'POST',
+      body: {
+        TipoContribuinte: tipoContribuinte,
+        ContribuinteConsulta: contribuinte,
+        CodigoIdentificacao: codigoIdentificacao || null,
+        GerarCertidaoPdf: Boolean(gerarPdf),
+      },
+    }),
+  // DUE - Declaração Única de Exportação
+  consultarDue: (env, numero, chave) =>
+    serproRequest(env, `${env.SERPRO_DUE_PATH || '/api-consulta-due/api'}/v2/due/${numero}/${chave}`),
+  // Faturamento (Compartilha RFB / e-CAC)
+  consultarFaturamento: (env, token, niContratante) =>
+    serproRequest(env, `${env.SERPRO_FATURAMENTO_PATH || '/consulta-faturamento/v1'}/Consultar/${token}/${niContratante}`),
+  autorizacoesFaturamento: (env, niContratante, niTitularDados) =>
+    serproRequest(env, `${env.SERPRO_FATURAMENTO_PATH || '/consulta-faturamento/v1'}/Autorizacoes/${niContratante}/${niTitularDados}`),
+  // Compras.gov.br - chat de mensagens e diligências da compra
+  comprasChat: (env, chaveCompra, { diligencias = false, desde = '', page = '', size = '' } = {}) => {
+    const qs = new URLSearchParams({ ordem: 'desc' });
+    if (desde) qs.set('desde', desde);
+    if (page) qs.set('page', page);
+    if (size) qs.set('size', size);
+    const base = env.SERPRO_COMPRAS_PATH || '/integra-compras/v1';
+    return serproRequest(env, `${base}/chat/${chaveCompra}${diligencias ? '/diligencias' : ''}?${qs.toString()}`);
+  },
+  // Integra Contador (procuração eletrônica e-CAC) - DadosEntrada JSON genérico
+  contador: (env, operacao, { jwtToken = '', autenticarProcuradorToken = '', dados = {} } = {}) => {
+    const headers = {};
+    if (jwtToken) headers.jwt_token = jwtToken;
+    if (autenticarProcuradorToken) headers.autenticar_procurador_token = autenticarProcuradorToken;
+    return serproRequest(env, `${env.SERPRO_CONTADOR_PATH || '/integra-contador/v1'}/${operacao}`, {
+      method: 'POST',
+      body: { DadosEntrada: dados },
+      headers,
+    });
+  },
+  // Carimbo de Tempo - verifica a assinatura x-signature de outras APIs Serpro
+  carimboTempo: (env, { base64, document: docs } = {}) => {
+    const body = { timestamp: { base64 } };
+    if (Array.isArray(docs)) body.document = docs;
+    return serproRequest(env, '/checkstamp/1/check', { method: 'POST', body });
+  },
+  // Integra Comex - operações de leitura (requer jwt_token SAPI quando aplicável)
+  comexContainer: (env, numeros, jwtToken = '') => {
+    const headers = jwtToken ? { jwt_token: jwtToken } : {};
+    return serproRequest(env, `${env.SERPRO_COMEX_CONTAINER_PATH || '/integra-comex-carga-srv-consultaconteiner/v1'}/conteiner/situacao`, {
+      method: 'POST',
+      body: numeros.map((n) => ({ numero: n })),
+      headers,
+    });
+  },
+  comexPresenca: (env, { nic, recinto }, jwtToken = '') => {
+    const headers = jwtToken ? { jwt_token: jwtToken } : {};
+    const qs = new URLSearchParams({ nic, recinto });
+    return serproRequest(env, `${env.SERPRO_COMEX_PRESENCA_PATH || '/siscarga-consulta-presenca/api'}/consulta?${qs.toString()}`, { headers });
+  },
+  comexHabilitacao: (env, cnpj, jwtToken = '') => {
+    const headers = jwtToken ? { jwt_token: jwtToken } : {};
+    return serproRequest(env, `${env.SERPRO_COMEX_HABILITACAO_PATH || '/cint-api'}/api/sapi/habilitacao/${cnpj}`, { headers });
+  },
   // Dívida Ativa da União (PGFN via Serpro) - API oficial do catálogo gov.br Conecta
   // Contrato: https://www.loja.serpro.gov.br/consulta-divida-ativa
   // Endpoint configurável via env SERPRO_DIVIDA_PATH

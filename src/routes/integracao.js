@@ -89,8 +89,10 @@ export async function handleCpf(env, request) {
   if (!isValidCpf(cpf)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
 
   let resultado;
-  if (serproEnabled(env)) {
-    resultado = await serpro.consultarCpf(env, cpf);
+  const nasc = onlyNumbers(url.searchParams.get('nasc') || '');
+  // Serpro CPF v3 exige o nascimento (ddmmaaaa); sem ele, usa a base gratuita
+  if (serproEnabled(env) && nasc.length === 8) {
+    resultado = await serpro.consultarCpf(env, cpf, nasc);
   }
   if (!resultado || !resultado.ok) {
     resultado = await consultarCpfReceita(env, cpf);
@@ -299,10 +301,11 @@ export async function handleSerpro(env, request) {
     case 'cnpj': {
       const cnpj = onlyNumbers(url.searchParams.get('cnpj') || '');
       if (!isValidCnpj(cnpj)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
-      const r = await serpro.consultarCnpj(env, cnpj);
-      if (!r.ok) return falha(r, `cnpj ${cnpj} ${r.code || ''}`);
-      const d = r.data;
-      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CNPJ', detalhe: cnpj, ip });
+      const modo = ['basica', 'qsa', 'empresa'].includes(url.searchParams.get('modo')) ? url.searchParams.get('modo') : 'basica';
+      const r = await serpro.consultarCnpj(env, cnpj, modo);
+      if (!r.ok) return falha(r, `cnpj ${cnpj} ${modo} ${r.code || ''}`);
+      const d = r.data || {};
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CNPJ', detalhe: `${cnpj} ${modo}`, ip });
       return ok({
         cnpj: {
           cnpj,
@@ -323,24 +326,140 @@ export async function handleSerpro(env, request) {
           capital_social: d.capitalSocial || d.capital_social || 0,
           socios: d.socios || [],
         },
-        fonte: 'Serpro PIN (Receita Federal)',
+        dados: d,
+        modo,
+        fonte: `Serpro PIN (Receita Federal) · ${modo}`,
       });
     }
     case 'cpf': {
       const cpf = onlyNumbers(url.searchParams.get('cpf') || '');
       if (!isValidCpf(cpf)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
-      const r = await serpro.consultarCpf(env, cpf);
+      const nasc = onlyNumbers(url.searchParams.get('nasc') || '');
+      if (nasc.length !== 8) return err('Informe o nascimento (ddmmaaaa) — obrigatório na Consulta CPF v3 do Serpro.', 400, 'NASC_INVALIDO');
+      const r = await serpro.consultarCpf(env, cpf, nasc);
       if (!r.ok) return falha(r, `cpf ${cpf} ${r.code || ''}`);
+      const d = r.data || {};
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CPF', detalhe: cpf, ip });
-      return ok({ cpf: r.data, fonte: 'Serpro PIN (Receita Federal)' });
+      return ok({ cpf: d, situacao: d.situacao || null, fonte: 'Serpro PIN (Receita Federal) · CPF v3' });
     }
     case 'situacao-cpf': {
       const cpf = onlyNumbers(url.searchParams.get('cpf') || '');
       if (!isValidCpf(cpf)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
-      const r = await serpro.situacaoCpf(env, cpf);
+      const nasc = onlyNumbers(url.searchParams.get('nasc') || '');
+      if (nasc.length !== 8) return err('Informe o nascimento (ddmmaaaa) — obrigatório na Consulta CPF v3 do Serpro.', 400, 'NASC_INVALIDO');
+      const r = await serpro.situacaoCpf(env, cpf, nasc);
       if (!r.ok) return falha(r, `situacao-cpf ${cpf} ${r.code || ''}`);
+      const d = r.data || {};
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_SITUACAO_CPF', detalhe: cpf, ip });
-      return ok({ situacao: r.data, fonte: 'Serpro (Situação Cadastral do CPF)' });
+      return ok({ cpf, situacao: d.situacao || d, fonte: 'Serpro (Situação Cadastral do CPF)' });
+    }
+    case 'nfe': {
+      const chave = onlyNumbers(url.searchParams.get('chave') || '');
+      if (chave.length !== 44) return err('Chave de acesso da NF-e inválida (44 dígitos).', 400, 'CHAVE_INVALIDA');
+      const r = await serpro.consultarNfe(env, chave);
+      if (!r.ok) return falha(r, `nfe ${chave} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_NFE', detalhe: chave, ip });
+      return ok({ nfe: r.data, fonte: 'Serpro - Consulta NF-e (Receita Federal)' });
+    }
+    case 'cnd': {
+      const body = await readBody(request);
+      const tipo = Number(body.tipo || url.searchParams.get('tipo') || 0);
+      if (![1, 2, 3].includes(tipo)) return err('Tipo de contribuinte inválido (1=PF, 2=PJ, 3=NIRF).', 400, 'TIPO_INVALIDO');
+      const contribuinte = onlyNumbers(body.contribuinte || url.searchParams.get('contribuinte') || '');
+      if (![8, 11, 14].includes(contribuinte.length)) return err('Contribuinte inválido (NIRF 8, CPF 11 ou CNPJ 14 dígitos).', 400, 'DOC_INVALIDO');
+      const r = await serpro.consultarCnd(env, {
+        tipoContribuinte: tipo,
+        contribuinte,
+        codigoIdentificacao: body.codigoIdentificacao,
+        gerarPdf: body.pdf === true || body.pdf === 'true',
+      });
+      if (!r.ok) return falha(r, `cnd ${contribuinte} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CND', detalhe: contribuinte, ip });
+      return ok({ certidao: r.data, fonte: 'Serpro - Certidão Negativa de Débitos (PGFN)' });
+    }
+    case 'due': {
+      const numero = String(url.searchParams.get('numero') || '').trim().toUpperCase();
+      const chave = String(url.searchParams.get('chave') || '').trim().toUpperCase();
+      if (!numero || !chave) return err('Informe o número e a chave de acesso da DUE.', 400, 'DUE_INVALIDO');
+      const r = await serpro.consultarDue(env, numero, chave);
+      if (!r.ok) return falha(r, `due ${numero} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_DUE', detalhe: numero, ip });
+      return ok({ due: r.data, fonte: 'Serpro - Declaração Única de Exportação (DUE)' });
+    }
+    case 'faturamento': {
+      const token = String(url.searchParams.get('token') || '').trim();
+      const niContratante = onlyNumbers(url.searchParams.get('contratante') || '');
+      if (!token) return err('Informe o token de autorização (e-CAC → Compartilha).', 400, 'TOKEN_INVALIDO');
+      if (niContratante.length !== 14) return err('CNPJ do contratante inválido.', 400, 'CNPJ_INVALIDO');
+      const r = await serpro.consultarFaturamento(env, token, niContratante);
+      if (!r.ok) return falha(r, `faturamento ${niContratante} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_FATURAMENTO', detalhe: niContratante, ip });
+      return ok({ faturamento: r.data, fonte: 'Serpro - Consulta Faturamento (Compartilha RFB)' });
+    }
+    case 'faturamento-autorizacoes': {
+      const niContratante = onlyNumbers(url.searchParams.get('contratante') || '');
+      const niTitularDados = onlyNumbers(url.searchParams.get('titular') || '');
+      if (niContratante.length !== 14) return err('CNPJ do contratante inválido.', 400, 'CNPJ_INVALIDO');
+      if (niTitularDados.length !== 11) return err('CPF do titular inválido.', 400, 'CPF_INVALIDO');
+      const r = await serpro.autorizacoesFaturamento(env, niContratante, niTitularDados);
+      if (!r.ok) return falha(r, `faturamento-autorizacoes ${niContratante} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_FATURAMENTO_AUTORIZACOES', detalhe: niContratante, ip });
+      return ok({ autorizacoes: r.data, fonte: 'Serpro - Autorizações de Faturamento (Compartilha RFB)' });
+    }
+    case 'compras': {
+      const chaveCompra = String(url.searchParams.get('compra') || '').trim();
+      if (!chaveCompra) return err('Informe a chave da compra.', 400, 'COMPRA_INVALIDA');
+      const diligencias = url.searchParams.get('tipo') === 'diligencias';
+      const r = await serpro.comprasChat(env, chaveCompra, { diligencias });
+      if (!r.ok) return falha(r, `compras ${chaveCompra} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_COMPRAS', detalhe: `${chaveCompra} ${diligencias ? 'diligencias' : 'chat'}`, ip });
+      return ok({ mensagens: r.data, fonte: `Serpro - Compras.gov.br (${diligencias ? 'diligências' : 'chat'})` });
+    }
+    case 'contador': {
+      const body = await readBody(request);
+      const operacao = ['Consultar', 'Declarar', 'Emitir', 'Monitorar', 'Apoiar'].includes(body.operacao) ? body.operacao : 'Consultar';
+      let dados = body.dados;
+      if (typeof dados === 'string') {
+        try { dados = JSON.parse(dados); } catch { return err('DadosEntrada precisa ser um JSON válido.', 400, 'JSON_INVALIDO'); }
+      }
+      if (!dados || typeof dados !== 'object') return err('Informe o DadosEntrada (JSON).', 400, 'DADOS_INVALIDOS');
+      const r = await serpro.contador(env, operacao, { jwtToken: body.jwtToken || '', dados });
+      if (!r.ok) return falha(r, `contador ${operacao} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONTADOR', detalhe: operacao, ip });
+      return ok({ retorno: r.data, operacao, fonte: 'Serpro - Integra Contador (procuração e-CAC)' });
+    }
+    case 'carimbo': {
+      const body = await readBody(request);
+      const base64 = String(body.base64 || '').trim();
+      if (!base64) return err('Informe o timestamp em base64.', 400, 'CARIMBO_INVALIDO');
+      const r = await serpro.carimboTempo(env, { base64, document: Array.isArray(body.document) ? body.document : undefined });
+      if (!r.ok) return falha(r, `carimbo ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CARIMBO', detalhe: base64.slice(0, 40), ip });
+      return ok({ verificacao: r.data, fonte: 'Serpro - Carimbo de Tempo (x-signature)' });
+    }
+    case 'comex': {
+      const body = await readBody(request);
+      const servico = ['container', 'presenca', 'habitacao'].includes(url.searchParams.get('servico')) ? url.searchParams.get('servico') : 'container';
+      const jwtToken = String(body.jwtToken || env.SERPRO_COMEX_JWT || '');
+      let r;
+      if (servico === 'container') {
+        const numeros = (Array.isArray(body.numeros) ? body.numeros : String(body.numero || url.searchParams.get('numero') || '').split(','))
+          .map((n) => String(n).trim()).filter(Boolean).slice(0, 10);
+        if (!numeros.length) return err('Informe ao menos um número de contêiner.', 400, 'CONTEINER_INVALIDO');
+        r = await serpro.comexContainer(env, numeros, jwtToken);
+      } else if (servico === 'presenca') {
+        const nic = String(body.nic || url.searchParams.get('nic') || '').trim();
+        const recinto = String(body.recinto || url.searchParams.get('recinto') || '').trim();
+        if (!nic || !recinto) return err('Informe NIC e recinto.', 400, 'PRESENCA_INVALIDA');
+        r = await serpro.comexPresenca(env, { nic, recinto }, jwtToken);
+      } else {
+        const cnpj = onlyNumbers(body.cnpj || url.searchParams.get('cnpj') || '');
+        if (!isValidCnpj(cnpj)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
+        r = await serpro.comexHabilitacao(env, cnpj, jwtToken);
+      }
+      if (!r.ok) return falha(r, `comex ${servico} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_COMEX', detalhe: servico, ip });
+      return ok({ comex: r.data, servico, fonte: `Serpro - Integra Comex (${servico})` });
     }
     case 'divida-ativa': {
       const ni = onlyNumbers(url.searchParams.get('ni') || '');
@@ -388,10 +507,19 @@ export async function handleSerpro(env, request) {
         serpro: 'online',
         lojaUrl: SERPRO_LOJA,
         servicos: [
-          { acao: 'cnpj', nome: 'Consulta CNPJ (Receita Federal)' },
-          { acao: 'cpf', nome: 'Consulta CPF (Receita Federal)' },
+          { acao: 'cnpj', nome: 'Consulta CNPJ (basica/qsa/empresa)' },
+          { acao: 'cpf', nome: 'Consulta CPF v3 (Receita Federal)' },
           { acao: 'situacao-cpf', nome: 'Situação Cadastral do CPF' },
           { acao: 'divida-ativa', nome: 'Dívida Ativa da União (PGFN)' },
+          { acao: 'nfe', nome: 'Consulta NF-e (chave de acesso)' },
+          { acao: 'cnd', nome: 'Certidão Negativa de Débitos (CND)' },
+          { acao: 'due', nome: 'Declaração Única de Exportação (DUE)' },
+          { acao: 'faturamento', nome: 'Consulta Faturamento (Compartilha RFB)' },
+          { acao: 'faturamento-autorizacoes', nome: 'Autorizações de Faturamento' },
+          { acao: 'compras', nome: 'Compras.gov.br (chat/diligências)' },
+          { acao: 'contador', nome: 'Integra Contador (procuração e-CAC)' },
+          { acao: 'carimbo', nome: 'Carimbo de Tempo (verificação x-signature)' },
+          { acao: 'comex', nome: 'Integra Comex (contêiner/presença/habilitação)' },
           { acao: 'ia', nome: 'Serpro IA (análise fiscal)' },
         ],
       });
