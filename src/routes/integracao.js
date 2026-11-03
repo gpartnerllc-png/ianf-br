@@ -267,31 +267,135 @@ export async function handleZapsignVerificar(env, request) {
   return json(r, r.ok ? 200 : 502);
 }
 
-// ============ SERPRO ============
+// ============ SERPRO (PIN / DÍVIDA ATIVA / IA) ============
+
+const SERPRO_LOJA = 'https://loja.serpro.gov.br';
 
 export async function handleSerpro(env, request) {
   const auth = await requireAuth(env, request);
   if (auth.error) return auth.error;
-  const url = new URL(request.url);
-  const acao = url.searchParams.get('acao') || 'status';
 
   if (!serproEnabled(env)) {
-    return json({ ok: false, code: 'SERPRO_NAO_CONFIGURADO', message: 'Serpro não configurado. Contrate em loja.serpro.gov.br e defina os secrets SERPRO_CONSUMER_KEY / SERPRO_CONSUMER_SECRET.' }, 503);
+    return json({ ok: false, code: 'SERPRO_NAO_CONFIGURADO', message: 'Serpro não configurado. Contrate em loja.serpro.gov.br e defina os secrets SERPRO_CONSUMER_KEY / SERPRO_CONSUMER_SECRET.', lojaUrl: SERPRO_LOJA }, 503);
   }
 
-  if (acao === 'cnpj') {
-    const cnpj = onlyNumbers(url.searchParams.get('cnpj') || '');
-    if (!isValidCnpj(cnpj)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
-    const r = await serpro.consultarCnpj(env, cnpj);
-    return json(r, r.ok ? 200 : 502);
+  const url = new URL(request.url);
+  const acao = url.searchParams.get('acao') || 'status';
+  const ip = getIp(request);
+
+  const falha = async (r, detalhe) => {
+    await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_FALHA', detalhe, ip });
+    if (r.code === 'SERPRO_SEM_ASSINATURA') {
+      return json({ ...r, lojaUrl: SERPRO_LOJA, message: r.message }, 503);
+    }
+    return json(r, r.code === 'SERPRO_AUTH' ? 503 : 502);
+  };
+
+  if (acao !== 'ia' && acao !== 'status') {
+    if (!(await rateLimit(env, ip, 'serpro'))) return err('Limite de consultas atingido.', 429, 'RATE_LIMIT');
   }
-  if (acao === 'cpf') {
-    const cpf = onlyNumbers(url.searchParams.get('cpf') || '');
-    if (!isValidCpf(cpf)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
-    const r = await serpro.consultarCpf(env, cpf);
-    return json(r, r.ok ? 200 : 502);
+
+  switch (acao) {
+    case 'cnpj': {
+      const cnpj = onlyNumbers(url.searchParams.get('cnpj') || '');
+      if (!isValidCnpj(cnpj)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
+      const r = await serpro.consultarCnpj(env, cnpj);
+      if (!r.ok) return falha(r, `cnpj ${cnpj} ${r.code || ''}`);
+      const d = r.data;
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CNPJ', detalhe: cnpj, ip });
+      return ok({
+        cnpj: {
+          cnpj,
+          razao_social: d.nomeEmpresarial || d.razaoSocial || d.razao_social,
+          nome_fantasia: d.nomeFantasia || '',
+          situacao_cadastral: d.descricaoSituacaoCadastral || d.situacaoCadastral,
+          cnae_codigo: d.codigoCnaePrincipal || d.cnaeFiscal,
+          cnae_principal: d.descricaoCnaePrincipal || d.cnae_principal || '',
+          uf: d.uf,
+          municipio: d.municipio,
+          logradouro: d.logradouro || '',
+          numero: d.numero || '',
+          bairro: d.bairro || '',
+          cep: d.cep || '',
+          telefone: d.telefone || d.dddTelefone1 || '',
+          email: d.email || '',
+          porte: d.porte || '',
+          capital_social: d.capitalSocial || d.capital_social || 0,
+          socios: d.socios || [],
+        },
+        fonte: 'Serpro PIN (Receita Federal)',
+      });
+    }
+    case 'cpf': {
+      const cpf = onlyNumbers(url.searchParams.get('cpf') || '');
+      if (!isValidCpf(cpf)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
+      const r = await serpro.consultarCpf(env, cpf);
+      if (!r.ok) return falha(r, `cpf ${cpf} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CONSULTA_CPF', detalhe: cpf, ip });
+      return ok({ cpf: r.data, fonte: 'Serpro PIN (Receita Federal)' });
+    }
+    case 'situacao-cpf': {
+      const cpf = onlyNumbers(url.searchParams.get('cpf') || '');
+      if (!isValidCpf(cpf)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
+      const r = await serpro.situacaoCpf(env, cpf);
+      if (!r.ok) return falha(r, `situacao-cpf ${cpf} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_SITUACAO_CPF', detalhe: cpf, ip });
+      return ok({ situacao: r.data, fonte: 'Serpro (Situação Cadastral do CPF)' });
+    }
+    case 'divida-ativa': {
+      const ni = onlyNumbers(url.searchParams.get('ni') || '');
+      if (ni.length !== 11 && ni.length !== 14) return err('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).', 400, 'NI_INVALIDO');
+      if (ni.length === 11 && !isValidCpf(ni)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
+      if (ni.length === 14 && !isValidCnpj(ni)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
+      const r = await serpro.consultarDividaAtiva(env, ni);
+      if (!r.ok) return falha(r, `divida-ativa ${ni} ${r.code || ''}`);
+      const d = r.data || {};
+      const raw = Array.isArray(d) ? d : d.inscricoes || d.listaInscricoes || d.data || [];
+      const inscricoes = (Array.isArray(raw) ? raw : []).map((i) => ({
+        numero: i.numeroInscricao || i.inscricao || '',
+        situacao: i.situacaoDescricao || i.situacao || '',
+        origem: i.origemDebito || i.origem || i.descricaoOrigem || '',
+        valor: Number(i.valorTotalConsolidadoMoeda || i.valorConsolidado || 0),
+        dataInscricao: i.dataInscricao || '',
+      }));
+      const ativas = inscricoes.filter((i) => String(i.situacao).toUpperCase() !== 'EXTINTA');
+      const total = ativas.reduce((s, i) => s + i.valor, 0);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_DIVIDA_ATIVA', detalhe: ni, ip });
+      return ok({
+        ni,
+        situacao: inscricoes.length === 0 ? 'sem_registros' : ativas.length === 0 ? 'regular' : 'com_debitos',
+        totalConsolidado: total,
+        inscricoes,
+        fonte: 'PGFN / Serpro - Dívida Ativa da União',
+      });
+    }
+    case 'ia': {
+      if (!(await rateLimit(env, ip, 'ai'))) return err('Limite de análises atingido.', 429, 'RATE_LIMIT');
+      const body = await readBody(request);
+      const prompt = String(body.prompt || '').trim().slice(0, 4000);
+      if (!prompt) return err('Informe o prompt da análise.', 400, 'PROMPT_INVALIDO');
+      const r = await serpro.ia(env, { prompt, contexto: body.contexto });
+      if (!r.ok) return falha(r, `ia ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_IA', detalhe: prompt.slice(0, 80), ip });
+      const d = r.data || {};
+      return ok({
+        resposta: d.resposta || d.resultado || d.choices?.[0]?.message?.content || d.content || d,
+        fonte: 'Serpro IA',
+      });
+    }
+    default:
+      return ok({
+        serpro: 'online',
+        lojaUrl: SERPRO_LOJA,
+        servicos: [
+          { acao: 'cnpj', nome: 'Consulta CNPJ (Receita Federal)' },
+          { acao: 'cpf', nome: 'Consulta CPF (Receita Federal)' },
+          { acao: 'situacao-cpf', nome: 'Situação Cadastral do CPF' },
+          { acao: 'divida-ativa', nome: 'Dívida Ativa da União (PGFN)' },
+          { acao: 'ia', nome: 'Serpro IA (análise fiscal)' },
+        ],
+      });
   }
-  return ok({ serpro: 'online' });
 }
 
 // ============ PGFN / REGULARIZE (Dívida Ativa da União) ============

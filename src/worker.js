@@ -103,7 +103,7 @@ async function routeApi(env, request, url) {
   if (path === '/api/integracao/zapsign' && method === 'GET') return handleZapsign(env, request);
   if (path === '/api/integracao/zapsign/protocolo' && method === 'POST') return handleZapsignProtocolo(env, request);
   if (path === '/api/integracao/zapsign/verificar' && method === 'POST') return handleZapsignVerificar(env, request);
-  if (path === '/api/integracao/serpro' && method === 'GET') return handleSerpro(env, request);
+  if (path === '/api/integracao/serpro' && (method === 'GET' || method === 'POST')) return handleSerpro(env, request);
   if (path === '/api/integracao/pgfn' && method === 'GET') return handlePgfn(env, request);
   if (path === '/api/integracao/serasa' && method === 'POST') return handleSerasa(env, request);
   if (path === '/api/integracao/apibrasil' && method === 'POST') return handleApibrasil(env, request);
