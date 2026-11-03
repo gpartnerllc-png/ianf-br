@@ -1325,14 +1325,52 @@ async function consultarDirectdata() {
   }
 }
 
-// ---------- Serpro (Receita / PGFN / IA) ----------
+// ---------- Serpro (Receita / PGFN / CND / DUE / Compras / Contador / Carimbo / Comex / IA) ----------
 const SERPRO_LOJA = 'https://loja.serpro.gov.br';
+
+// Especificação de cada serviço: campo principal + campos extras dinâmicos
+const SERPRO_SERVICOS = {
+  cnpj: { main: true, ph: '00.000.000/0000-00', extras: [['modo', 'select', [['basica', 'Básica (cadastro completo)'], ['qsa', 'Quadro Societário (QSA)'], ['empresa', 'Empresa (completa, sócios com CPF)']]]] },
+  cpf: { main: true, ph: '000.000.000-00', extras: [['nasc', 'input', 'Nascimento dd/mm/aaaa (obrigatório na CPF v3)']] },
+  'situacao-cpf': { main: true, ph: '000.000.000-00', extras: [['nasc', 'input', 'Nascimento dd/mm/aaaa (obrigatório na CPF v3)']] },
+  nfe: { main: true, ph: 'Chave de acesso da NF-e (44 dígitos)' },
+  cnd: { main: true, ph: 'CPF ou CNPJ do contribuinte', extras: [['tipo', 'select', [['2', 'Pessoa Jurídica'], ['1', 'Pessoa Física'], ['3', 'NIRF']]], ['pdf', 'check', 'Gerar certidão em PDF']] },
+  'divida-ativa': { main: true, ph: 'CPF ou CNPJ' },
+  faturamento: { main: false, extras: [['token', 'input', 'Token de autorização (e-CAC → Compartilha)'], ['contratante', 'input', 'CNPJ do contratante (14 dígitos)']] },
+  'faturamento-autorizacoes': { main: false, extras: [['contratante', 'input', 'CNPJ do contratante (14 dígitos)'], ['titular', 'input', 'CPF do titular dos dados (11 dígitos)']] },
+  due: { main: false, extras: [['numero', 'input', 'Número da DUE (ex.: 18BR0000133506)'], ['chave', 'input', 'Chave de acesso da DUE (ex.: 18ERM135006)']] },
+  comex: { main: true, ph: 'Nº contêiner (ex.: MOLU...), NIC ou CNPJ', extras: [['servico', 'select', [['container', 'Situação de contêiner'], ['presenca', 'Presença de carga (NIC no campo + recinto abaixo)'], ['habitacao', 'Habilitação (CNPJ)']]], ['recinto', 'input', 'Recinto (obrigatório p/ presença de carga)'], ['jwt', 'input', 'JWT token SAPI (opcional)']] },
+  compras: { main: true, ph: 'Chave da compra', extras: [['tipo', 'select', [['chat', 'Chat de mensagens'], ['diligencias', 'Diligências']]]] },
+  contador: { main: false, extras: [['operacao', 'select', [['Consultar', 'Consultar'], ['Declarar', 'Declarar'], ['Emitir', 'Emitir'], ['Monitorar', 'Monitorar'], ['Apoiar', 'Apoiar']]], ['jwt', 'input', 'JWT token (procuração e-CAC)'], ['dados', 'textarea', 'DadosEntrada (JSON)']] },
+  carimbo: { main: false, extras: [['base64', 'textarea', 'Timestamp em base64 (header x-signature)'], ['document', 'textarea', 'Documento original (JSON) — opcional']] },
+  ia: { main: false, extras: [['prompt', 'textarea', 'Ex.: analise o CNPJ 27.865.757/0001-02 e aponte riscos fiscais']] },
+};
+
+function serproExtra(id) {
+  return document.getElementById(`serproE_${id}`);
+}
 
 function serproServicoChange() {
   const svc = $('serproServico')?.value || 'cnpj';
-  $('serproIaRow').classList.toggle('hidden', svc !== 'ia');
-  $('serproInput').classList.toggle('hidden', svc === 'ia');
-  $('serproInput').placeholder = svc === 'divida-ativa' ? 'CPF ou CNPJ' : svc === 'cnpj' ? '00.000.000/0000-00' : '000.000.000-00';
+  const spec = SERPRO_SERVICOS[svc] || SERPRO_SERVICOS.cnpj;
+  $('serproMainRow').classList.toggle('hidden', !spec.main);
+  if (spec.ph) $('serproInput').placeholder = spec.ph;
+  const ex = $('serproExtras');
+  ex.innerHTML = '';
+  (spec.extras || []).forEach(([id, tipo, rotulo]) => {
+    const row = document.createElement('div');
+    row.className = 'search-row mt-3';
+    if (tipo === 'select') {
+      row.innerHTML = `<select class="field" id="serproE_${id}">${rotulo.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`;
+    } else if (tipo === 'check') {
+      row.innerHTML = `<label class="small muted" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="serproE_${id}"> ${rotulo}</label>`;
+    } else if (tipo === 'textarea') {
+      row.innerHTML = `<textarea class="field" id="serproE_${id}" rows="3" placeholder="${rotulo}"></textarea>`;
+    } else {
+      row.innerHTML = `<input class="field" id="serproE_${id}" placeholder="${rotulo}">`;
+    }
+    ex.appendChild(row);
+  });
   $('serpro-result').innerHTML = '';
 }
 
@@ -1351,8 +1389,9 @@ async function consultarSerpro() {
   el.innerHTML = '<p class="muted">Consultando a base oficial do Serpro...</p>';
 
   try {
+    // ---- Serviços sem campo principal ----
     if (svc === 'ia') {
-      const prompt = ($('serproIaPrompt')?.value || '').trim();
+      const prompt = (serproExtra('prompt')?.value || '').trim();
       if (!prompt) {
         el.innerHTML = '<p class="form-error">Descreva o que a IA deve analisar.</p>';
         return;
@@ -1362,22 +1401,165 @@ async function consultarSerpro() {
       return;
     }
 
+    if (svc === 'due') {
+      const numero = (serproExtra('numero')?.value || '').trim();
+      const chave = (serproExtra('chave')?.value || '').trim();
+      if (!numero || !chave) {
+        el.innerHTML = '<p class="form-error">Informe o número e a chave de acesso da DUE.</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=due&numero=${encodeURIComponent(numero)}&chave=${encodeURIComponent(chave)}`);
+      el.innerHTML = `<h4>DUE ${ddEsc(numero)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.due)}`;
+      return;
+    }
+
+    if (svc === 'faturamento') {
+      const token = (serproExtra('token')?.value || '').trim();
+      const contratante = (serproExtra('contratante')?.value || '').replace(/\D/g, '');
+      if (!token || contratante.length !== 14) {
+        el.innerHTML = '<p class="form-error">Informe o token de autorização e o CNPJ do contratante (14 dígitos).</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=faturamento&token=${encodeURIComponent(token)}&contratante=${contratante}`);
+      el.innerHTML = `<h4>Faturamento (Compartilha RFB)</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.faturamento)}`;
+      return;
+    }
+
+    if (svc === 'faturamento-autorizacoes') {
+      const contratante = (serproExtra('contratante')?.value || '').replace(/\D/g, '');
+      const titular = (serproExtra('titular')?.value || '').replace(/\D/g, '');
+      if (contratante.length !== 14 || titular.length !== 11) {
+        el.innerHTML = '<p class="form-error">CNPJ do contratante (14) e CPF do titular (11) são obrigatórios.</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=faturamento-autorizacoes&contratante=${contratante}&titular=${titular}`);
+      el.innerHTML = `<h4>Autorizações de Faturamento</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.autorizacoes)}`;
+      return;
+    }
+
+    if (svc === 'contador') {
+      const operacao = serproExtra('operacao')?.value || 'Consultar';
+      const jwt = (serproExtra('jwt')?.value || '').trim();
+      const dadosRaw = (serproExtra('dados')?.value || '').trim();
+      if (!dadosRaw) {
+        el.innerHTML = '<p class="form-error">Informe o DadosEntrada (JSON).</p>';
+        return;
+      }
+      let dados;
+      try { dados = JSON.parse(dadosRaw); } catch {
+        el.innerHTML = '<p class="form-error">DadosEntrada precisa ser um JSON válido.</p>';
+        return;
+      }
+      const data = await api('/integracao/serpro?acao=contador', { method: 'POST', body: JSON.stringify({ operacao, jwtToken: jwt, dados }) });
+      el.innerHTML = `<h4>Integra Contador · ${ddEsc(operacao)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.retorno)}`;
+      return;
+    }
+
+    if (svc === 'carimbo') {
+      const base64 = (serproExtra('base64')?.value || '').trim();
+      if (!base64) {
+        el.innerHTML = '<p class="form-error">Informe o timestamp em base64.</p>';
+        return;
+      }
+      let document;
+      const docRaw = (serproExtra('document')?.value || '').trim();
+      if (docRaw) {
+        try { document = JSON.parse(docRaw); } catch {
+          el.innerHTML = '<p class="form-error">Documento precisa ser um JSON válido.</p>';
+          return;
+        }
+      }
+      const data = await api('/integracao/serpro?acao=carimbo', { method: 'POST', body: JSON.stringify({ base64, document }) });
+      el.innerHTML = `<h4>Carimbo de Tempo</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.verificacao)}`;
+      return;
+    }
+
+    // ---- Serviços com campo principal ----
     const valor = ($('serproInput')?.value || '').replace(/\D/g, '');
-    const campo = svc === 'divida-ativa' ? 'ni' : svc === 'cnpj' ? 'cnpj' : 'cpf';
-    const esperado = svc === 'divida-ativa' ? '11 ou 14' : svc === 'cnpj' ? '14' : '11';
+    if (!valor) {
+      el.innerHTML = '<p class="form-error">Preencha o campo de consulta.</p>';
+      return;
+    }
+
+    if (svc === 'cnpj') {
+      if (valor.length !== 14) {
+        el.innerHTML = '<p class="form-error">CNPJ inválido (14 dígitos).</p>';
+        return;
+      }
+      const modo = serproExtra('modo')?.value || 'basica';
+      const data = await api(`/integracao/serpro?acao=cnpj&cnpj=${valor}&modo=${modo}`);
+      if (modo !== 'basica') {
+        el.innerHTML = `<h4>Consulta CNPJ · ${ddEsc(modo)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.dados)}`;
+        return;
+      }
+      const d = data.cnpj || {};
+      el.innerHTML = `
+        <h4>${ddEsc(d.razao_social || 'CNPJ')}</h4>
+        <p class="muted small">${ddEsc(data.fonte || 'Serpro PIN')}${d.nome_fantasia ? ' · ' + ddEsc(d.nome_fantasia) : ''}</p>
+        <div class="kv"><span>Situação cadastral</span><b>${ddEsc(String(d.situacao_cadastral || '—'))}</b></div>
+        <div class="kv"><span>CNAE principal</span><b>${d.cnae_codigo ? d.cnae_codigo + (d.cnae_principal ? ' · ' + ddEsc(String(d.cnae_principal)) : '') : '—'}</b></div>
+        <div class="kv"><span>Município/UF</span><b>${ddEsc(String(d.municipio || '—'))}/${ddEsc(String(d.uf || ''))}</b></div>
+        ${d.email ? `<div class="kv"><span>E-mail</span><b>${ddEsc(d.email)}</b></div>` : ''}
+        ${d.telefone ? `<div class="kv"><span>Telefone</span><b>${ddEsc(d.telefone)}</b></div>` : ''}
+        <div class="kv"><span>Capital social</span><b>${fmt(Number(d.capital_social || 0))}</b></div>
+        ${(d.socios || []).length ? `<p class="mt-3 small"><b>Sócios:</b> ${d.socios.map((s) => ddEsc(s.nome || s.nomeSocio || s.razaoSocial || '')).filter(Boolean).join(', ')}</p>` : ''}`;
+      return;
+    }
+
+    if (svc === 'cpf' || svc === 'situacao-cpf') {
+      if (valor.length !== 11) {
+        el.innerHTML = '<p class="form-error">CPF inválido (11 dígitos).</p>';
+        return;
+      }
+      const nascRaw = (serproExtra('nasc')?.value || '').replace(/\D/g, '');
+      const m = /^(\d{2})(\d{2})(\d{4})$/.exec(nascRaw);
+      const nasc = nascRaw.length === 8 && !m ? nascRaw : (m ? m[1] + m[2] + m[3] : '');
+      if (nasc.length !== 8) {
+        el.innerHTML = '<p class="form-error">Informe o nascimento (dd/mm/aaaa) — obrigatório na CPF v3 do Serpro.</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=${svc}&cpf=${valor}&nasc=${nasc}`);
+      if (svc === 'situacao-cpf') {
+        el.innerHTML = `<h4>Situação do CPF</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.situacao)}`;
+        return;
+      }
+      const sit = data.situacao;
+      el.innerHTML = `
+        <h4>Consulta CPF</h4>
+        <p class="muted small">${ddEsc(data.fonte || '')}</p>
+        ${sit ? `<div class="kv"><span>Situação cadastral</span><b>${ddEsc(String(sit.codigo || ''))} · ${ddEsc(String(sit.descricao || '—'))}</b></div>` : ''}
+        ${ddBloque(data.cpf)}`;
+      return;
+    }
+
+    if (svc === 'nfe') {
+      if (valor.length !== 44) {
+        el.innerHTML = '<p class="form-error">Chave de acesso inválida (44 dígitos).</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=nfe&chave=${valor}`);
+      el.innerHTML = `<h4>Consulta NF-e</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.nfe)}`;
+      return;
+    }
+
+    if (svc === 'cnd') {
+      if (![8, 11, 14].includes(valor.length)) {
+        el.innerHTML = '<p class="form-error">Contribuinte inválido (CPF 11, CNPJ 14 ou NIRF 8).</p>';
+        return;
+      }
+      const tipo = Number(serproExtra('tipo')?.value || (valor.length === 11 ? 1 : 2));
+      const pdf = serproExtra('pdf')?.checked === true;
+      const data = await api('/integracao/serpro?acao=cnd', { method: 'POST', body: JSON.stringify({ tipo, contribuinte: valor, pdf }) });
+      el.innerHTML = `<h4>CND - Certidão Negativa de Débitos</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.certidao)}`;
+      return;
+    }
+
     if (svc === 'divida-ativa') {
       if (valor.length !== 11 && valor.length !== 14) {
         el.innerHTML = '<p class="form-error">Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).</p>';
         return;
       }
-    } else if (valor.length !== Number(esperado)) {
-      el.innerHTML = `<p class="form-error">${svc === 'cnpj' ? 'CNPJ' : 'CPF'} inválido (${esperado} dígitos).</p>`;
-      return;
-    }
-
-    const data = await api(`/integracao/serpro?acao=${svc}&${campo}=${valor}`);
-
-    if (svc === 'divida-ativa') {
+      const data = await api(`/integracao/serpro?acao=divida-ativa&ni=${valor}`);
       const tags = {
         com_debitos: ['tag-cancelada', '⚠ Com débitos'],
         regular: ['tag-autorizada', '✓ Regular'],
@@ -1397,27 +1579,38 @@ async function consultarSerpro() {
       return;
     }
 
-    if (svc === 'cnpj') {
-      const d = data.cnpj || {};
-      el.innerHTML = `
-        <h4>${ddEsc(d.razao_social || 'CNPJ')}</h4>
-        <p class="muted small">${ddEsc(data.fonte || 'Serpro PIN')}${d.nome_fantasia ? ' · ' + ddEsc(d.nome_fantasia) : ''}</p>
-        <div class="kv"><span>Situação cadastral</span><b>${ddEsc(String(d.situacao_cadastral || '—'))}</b></div>
-        <div class="kv"><span>CNAE principal</span><b>${d.cnae_codigo ? d.cnae_codigo + (d.cnae_principal ? ' · ' + ddEsc(String(d.cnae_principal)) : '') : '—'}</b></div>
-        <div class="kv"><span>Município/UF</span><b>${ddEsc(String(d.municipio || '—'))}/${ddEsc(String(d.uf || ''))}</b></div>
-        ${d.email ? `<div class="kv"><span>E-mail</span><b>${ddEsc(d.email)}</b></div>` : ''}
-        ${d.telefone ? `<div class="kv"><span>Telefone</span><b>${ddEsc(d.telefone)}</b></div>` : ''}
-        <div class="kv"><span>Capital social</span><b>${fmt(Number(d.capital_social || 0))}</b></div>
-        ${(d.socios || []).length ? `<p class="mt-3 small"><b>Sócios:</b> ${d.socios.map((s) => ddEsc(s.nome || s.nomeSocio || s.razaoSocial || '')).filter(Boolean).join(', ')}</p>` : ''}`;
+    if (svc === 'compras') {
+      const tipo = serproExtra('tipo')?.value || 'chat';
+      const data = await api(`/integracao/serpro?acao=compras&compra=${encodeURIComponent(valor)}&tipo=${tipo}`);
+      el.innerHTML = `<h4>Compras.gov.br · ${tipo === 'diligencias' ? 'Diligências' : 'Chat'}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.mensagens)}`;
       return;
     }
 
-    if (svc === 'situacao-cpf') {
-      el.innerHTML = `<h4>Situação do CPF</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.situacao)}`;
+    if (svc === 'comex') {
+      const servico = serproExtra('servico')?.value || 'container';
+      const jwt = (serproExtra('jwt')?.value || '').trim();
+      const recinto = (serproExtra('recinto')?.value || '').trim();
+      if (servico === 'habitacao' && valor.length !== 14) {
+        el.innerHTML = '<p class="form-error">CNPJ inválido (14 dígitos).</p>';
+        return;
+      }
+      if (servico === 'presenca' && !recinto) {
+        el.innerHTML = '<p class="form-error">Informe o recinto para presença de carga.</p>';
+        return;
+      }
+      let data;
+      if (servico === 'container') {
+        data = await api('/integracao/serpro?acao=comex&servico=container', { method: 'POST', body: JSON.stringify({ numero: valor, jwtToken: jwt }) });
+      } else if (servico === 'presenca') {
+        data = await api('/integracao/serpro?acao=comex&servico=presenca', { method: 'POST', body: JSON.stringify({ nic: valor, recinto, jwtToken: jwt }) });
+      } else {
+        data = await api(`/integracao/serpro?acao=comex&servico=habitacao&cnpj=${valor}`, { method: 'POST', body: JSON.stringify({ jwtToken: jwt }) });
+      }
+      el.innerHTML = `<h4>Integra Comex · ${ddEsc(servico)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.comex)}`;
       return;
     }
 
-    el.innerHTML = `<h4>Consulta CPF</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.cpf)}`;
+    el.innerHTML = '<p class="form-error">Serviço não reconhecido.</p>';
   } catch (erro) {
     serproErro(el, erro);
   }
@@ -1443,6 +1636,7 @@ window.UI = UI;
 function init() {
   initBackground($('bg-3d'));
   ddInit();
+  serproServicoChange();
 
   // Navegação
   document.querySelectorAll('.nav-btn').forEach((b) => b.addEventListener('click', () => {

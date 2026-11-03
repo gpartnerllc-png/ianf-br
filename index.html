@@ -410,24 +410,39 @@
                     <div id="dd-result" class="result-card mt-3"></div>
                 </div>
                 <div class="panel glass">
-                    <h3 class="panel-title">🇧🇷 Serpro <span class="panel-sub">Bases oficiais do governo · Receita · PGFN · IA</span></h3>
-                    <p class="muted small">Consulta CNPJ, CPF e situação cadastral na Receita Federal, Dívida Ativa da União (PGFN) e Serpro IA — APIs oficiais do Serpro (assinatura em loja.serpro.gov.br).</p>
+                    <h3 class="panel-title">🇧🇷 Serpro <span class="panel-sub">Bases oficiais do governo · 14 serviços</span></h3>
+                    <p class="muted small">Receita Federal (CNPJ/CPF/NF-e), PGFN (Dívida Ativa/CND), DUE, Faturamento Compartilha, Compras.gov.br, Integra Contador, Carimbo de Tempo, Integra Comex e Serpro IA — APIs oficiais do Serpro (assinatura em loja.serpro.gov.br).</p>
                     <div class="search-row mt-3">
-                        <select class="field" id="serproServico" style="max-width:280px" onchange="UI.serproServicoChange()">
-                            <option value="cnpj">Consulta CNPJ (Receita)</option>
-                            <option value="cpf">Consulta CPF (Receita)</option>
-                            <option value="situacao-cpf">Situação do CPF (Receita)</option>
-                            <option value="divida-ativa">Dívida Ativa da União (PGFN)</option>
-                            <option value="ia">Serpro IA (análise fiscal)</option>
+                        <select class="field" id="serproServico" style="max-width:300px" onchange="UI.serproServicoChange()">
+                            <optgroup label="Cadastral (Receita Federal)">
+                                <option value="cnpj">Consulta CNPJ</option>
+                                <option value="cpf">Consulta CPF (v3)</option>
+                                <option value="situacao-cpf">Situação do CPF</option>
+                            </optgroup>
+                            <optgroup label="Fiscal (Receita / PGFN)">
+                                <option value="nfe">Consulta NF-e (chave)</option>
+                                <option value="cnd">CND - Certidão Negativa</option>
+                                <option value="divida-ativa">Dívida Ativa da União</option>
+                                <option value="faturamento">Faturamento (Compartilha)</option>
+                                <option value="faturamento-autorizacoes">Autorizações de Faturamento</option>
+                            </optgroup>
+                            <optgroup label="Comércio Exterior">
+                                <option value="due">DUE (Exportação)</option>
+                                <option value="comex">Integra Comex</option>
+                            </optgroup>
+                            <optgroup label="Serviços">
+                                <option value="compras">Compras.gov.br</option>
+                                <option value="contador">Integra Contador</option>
+                                <option value="carimbo">Carimbo de Tempo</option>
+                                <option value="ia">Serpro IA</option>
+                            </optgroup>
                         </select>
                     </div>
-                    <div class="search-row mt-3">
+                    <div class="search-row mt-3" id="serproMainRow">
                         <input class="field" id="serproInput" placeholder="00.000.000/0000-00">
                         <button class="btn btn-gradient" onclick="UI.consultarSerpro()">Consultar</button>
                     </div>
-                    <div class="mt-3 hidden" id="serproIaRow">
-                        <textarea class="field" id="serproIaPrompt" rows="3" placeholder="Ex.: analise o CNPJ 27.865.757/0001-02 e aponte riscos fiscais"></textarea>
-                    </div>
+                    <div id="serproExtras"></div>
                     <div id="serpro-result" class="result-card mt-3"></div>
                 </div>
             </div>
