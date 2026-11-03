@@ -461,6 +461,147 @@ export async function handleSerpro(env, request) {
       await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_COMEX', detalhe: servico, ip });
       return ok({ comex: r.data, servico, fonte: `Serpro - Integra Comex (${servico})` });
     }
+    case 'cartorio': {
+      const ni = onlyNumbers(url.searchParams.get('ni') || '');
+      const modo = ['cpf', 'basica', 'qsa', 'empresa'].includes(url.searchParams.get('modo')) ? url.searchParams.get('modo') : 'basica';
+      if (modo === 'cpf' && (ni.length !== 11 || !isValidCpf(ni))) return err('CPF inválido.', 400, 'CPF_INVALIDO');
+      if (modo !== 'cpf' && (ni.length !== 14 || !isValidCnpj(ni))) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
+      const r = await serpro.consultarCpfCnpj(env, modo, ni);
+      if (!r.ok) return falha(r, `cartorio ${modo} ${ni} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_CARTORIO', detalhe: `${ni} ${modo}`, ip });
+      return ok({ consulta: r.data, modo, fonte: 'Serpro - Cartório Data (Consulta CPF/CNPJ v2)' });
+    }
+    case 'renda': {
+      const tipo = ['consultar', 'autorizacoes', 'status'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'consultar';
+      let r;
+      if (tipo === 'status') {
+        r = await serpro.rendaStatus(env);
+      } else if (tipo === 'autorizacoes') {
+        const niContratante = onlyNumbers(url.searchParams.get('contratante') || '');
+        const niTitularDados = onlyNumbers(url.searchParams.get('titular') || '');
+        if (niContratante.length !== 14) return err('CNPJ do contratante inválido.', 400, 'CNPJ_INVALIDO');
+        if (niTitularDados.length !== 11) return err('CPF do titular inválido.', 400, 'CPF_INVALIDO');
+        r = await serpro.rendaAutorizacoes(env, niContratante, niTitularDados);
+      } else {
+        const token = String(url.searchParams.get('token') || '').trim();
+        if (!token) return err('Informe o token de autorização (e-CAC → Compartilha).', 400, 'TOKEN_INVALIDO');
+        r = await serpro.rendaCpf(env, token);
+      }
+      if (!r.ok) return falha(r, `renda ${tipo} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_RENDA', detalhe: tipo, ip });
+      return ok({ renda: r.data, tipo, fonte: 'Serpro - Renda PF (Declaração IRPF)' });
+    }
+    case 'restituicao': {
+      const tipo = ['consultar', 'autorizacoes', 'status'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'consultar';
+      let r;
+      if (tipo === 'status') {
+        r = await serpro.restituicaoStatus(env);
+      } else if (tipo === 'autorizacoes') {
+        const niContratante = onlyNumbers(url.searchParams.get('contratante') || '');
+        const niTitularDados = onlyNumbers(url.searchParams.get('titular') || '');
+        if (niContratante.length !== 14) return err('CNPJ do contratante inválido.', 400, 'CNPJ_INVALIDO');
+        if (niTitularDados.length !== 11) return err('CPF do titular inválido.', 400, 'CPF_INVALIDO');
+        r = await serpro.restituicaoAutorizacoes(env, niContratante, niTitularDados);
+      } else {
+        const token = String(url.searchParams.get('token') || '').trim();
+        if (!token) return err('Informe o token de autorização (e-CAC → Compartilha).', 400, 'TOKEN_INVALIDO');
+        r = await serpro.restituicaoCpf(env, token);
+      }
+      if (!r.ok) return falha(r, `restituicao ${tipo} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_RESTITUICAO', detalhe: tipo, ip });
+      return ok({ restituicao: r.data, tipo, fonte: 'Serpro - Restituição IRPF' });
+    }
+    case 'datavalid': {
+      const body = await readBody(request);
+      const cpf = onlyNumbers(body.cpf || url.searchParams.get('cpf') || '');
+      if (cpf.length !== 11) return err('CPF inválido (11 dígitos).', 400, 'CPF_INVALIDO');
+      const nascRaw = onlyNumbers(body.nasc || '');
+      let nasc = '';
+      if (nascRaw) {
+        const m = /^(\d{2})(\d{2})(\d{4})$/.exec(nascRaw);
+        nasc = nascRaw.length === 8 && !m ? nascRaw : (m ? m[1] + m[2] + m[3] : '');
+        if (nasc.length !== 8) return err('Nascimento inválido (dd/mm/aaaa).', 400, 'NASC_INVALIDO');
+      }
+      const nome = String(body.nome || '').trim();
+      const validacao = {};
+      if (nome) validacao.nome = nome;
+      if (nasc) validacao.data_nascimento = nasc;
+      const privacidade = { rfb: body.rfb === true || body.rfb === 'true', senatran: body.senatran === true || body.senatran === 'true' };
+      if (!privacidade.rfb && !privacidade.senatran) privacidade.rfb = true;
+      const r = await serpro.datavalidValidar(env, { cpf, privacidade, validacao });
+      if (!r.ok) return falha(r, `datavalid ${cpf} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_DATAVALID', detalhe: cpf, ip });
+      return ok({ validacao: r.data, fonte: 'Serpro - Datavalid v5 (validação de identidade)' });
+    }
+    case 'datavalid-status': {
+      const r = await serpro.datavalidStatus(env);
+      if (!r.ok) return falha(r, `datavalid-status ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_DATAVALID_STATUS', detalhe: 'status', ip });
+      return ok({ status: r.data, fonte: 'Serpro - Datavalid v5 (status)' });
+    }
+    case 'biovalid': {
+      const body = await readBody(request);
+      const cpf = onlyNumbers(body.cpf || url.searchParams.get('cpf') || '');
+      if (cpf.length !== 11) return err('CPF inválido.', 400, 'CPF_INVALIDO');
+      const servico = body.servico === 'liveness' ? 'liveness' : 'token';
+      let r;
+      if (servico === 'liveness') {
+        const pin = String(body.pin || '').trim();
+        const device = String(body.device || '').trim();
+        if (!pin || !device) return err('PIN e identificador do dispositivo são obrigatórios na prova de vida.', 400, 'LIVENESS_INVALIDO');
+        r = await serpro.biovalidLiveness(env, { cpf, pin, device, selfie: body.selfie, sexo: body.sexo, cnh: body.cnh });
+      } else {
+        r = await serpro.biovalidToken(env, { cpf, expiraEm: body.expiraEm, tentativas: body.tentativas });
+      }
+      if (!r.ok) return falha(r, `biovalid ${servico} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_BIOVALID', detalhe: servico, ip });
+      return ok({ biovalid: r.data, servico, fonte: `Serpro - BioValid (${servico === 'liveness' ? 'prova de vida' : 'token'})` });
+    }
+    case 'antecipa': {
+      const tipo = ['avaliacao', 'contratos', 'ordembancaria', 'cotacoes', 'proposta'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'avaliacao';
+      const id = String(url.searchParams.get('id') || '').trim();
+      let sub;
+      if (tipo === 'avaliacao') {
+        const ni = onlyNumbers(url.searchParams.get('ni') || '');
+        if (ni.length !== 11 && ni.length !== 14) return err('Informe um CPF (11) ou CNPJ (14) do fornecedor.', 400, 'NI_INVALIDO');
+        if (ni.length === 11 && !isValidCpf(ni)) return err('CPF inválido.', 400, 'CPF_INVALIDO');
+        if (ni.length === 14 && !isValidCnpj(ni)) return err('CNPJ inválido.', 400, 'CNPJ_INVALIDO');
+        sub = `/avaliacao/fornecedor/${ni}`;
+      } else if (tipo === 'cotacoes') {
+        sub = '/v2/cotacoesdisponiveis';
+      } else {
+        if (!id) return err('Informe o ID.', 400, 'ID_INVALIDO');
+        if (tipo === 'contratos') sub = `/execucoes/contratos/${encodeURIComponent(id)}`;
+        else if (tipo === 'ordembancaria') sub = `/ordembancaria/consultar/${encodeURIComponent(id)}`;
+        else sub = `/cotacao/${encodeURIComponent(id)}/proposta`;
+      }
+      const r = await serpro.antecipaLer(env, sub);
+      if (!r.ok) return falha(r, `antecipa ${tipo} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_ANTECIPA', detalhe: tipo, ip });
+      return ok({ antecipa: r.data, tipo, fonte: 'Serpro - Antecipa Gov (consulta)' });
+    }
+    case 'nfe-push': {
+      const tipo = ['status', 'listar', 'criar', 'excluir'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : 'status';
+      const body = await readBody(request);
+      let r;
+      if (tipo === 'status') {
+        r = await serpro.nfeStatus(env);
+      } else if (tipo === 'listar') {
+        r = await serpro.nfePushListar(env);
+      } else if (tipo === 'excluir') {
+        const id = String(body.id || url.searchParams.get('id') || '').trim();
+        if (!id) return err('Informe o ID do monitoramento.', 400, 'ID_INVALIDO');
+        r = await serpro.nfePushExcluir(env, encodeURIComponent(id));
+      } else {
+        const chaves = (Array.isArray(body.chaves) ? body.chaves : String(body.chaves || '').split(/[\n,;\s]+/))
+          .map((c) => onlyNumbers(String(c))).filter((c) => c.length === 44).slice(0, 500);
+        if (!chaves.length) return err('Informe ao menos uma chave de acesso válida (44 dígitos).', 400, 'CHAVE_INVALIDA');
+        r = await serpro.nfePushCriar(env, chaves);
+      }
+      if (!r.ok) return falha(r, `nfe-push ${tipo} ${r.code || ''}`);
+      await audit(env, { userId: auth.user.id, email: auth.user.email, acao: 'SERPRO_NFE_PUSH', detalhe: tipo, ip });
+      return ok({ push: r.data, tipo, fonte: `Serpro - NF-e push (${tipo})` });
+    }
     case 'divida-ativa': {
       const ni = onlyNumbers(url.searchParams.get('ni') || '');
       if (ni.length !== 11 && ni.length !== 14) return err('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).', 400, 'NI_INVALIDO');
@@ -520,6 +661,14 @@ export async function handleSerpro(env, request) {
           { acao: 'contador', nome: 'Integra Contador (procuração e-CAC)' },
           { acao: 'carimbo', nome: 'Carimbo de Tempo (verificação x-signature)' },
           { acao: 'comex', nome: 'Integra Comex (contêiner/presença/habilitação)' },
+          { acao: 'cartorio', nome: 'Cartório Data (Consulta CPF/CNPJ v2)' },
+          { acao: 'renda', nome: 'Renda PF (Declaração IRPF - Compartilha)' },
+          { acao: 'restituicao', nome: 'Restituição do IRPF' },
+          { acao: 'datavalid', nome: 'Datavalid v5 (validação de identidade)' },
+          { acao: 'datavalid-status', nome: 'Datavalid v5 (status)' },
+          { acao: 'biovalid', nome: 'BioValid (biometria facial)' },
+          { acao: 'antecipa', nome: 'Antecipa Gov (consultas)' },
+          { acao: 'nfe-push', nome: 'NF-e push (monitoramento de chaves)' },
           { acao: 'ia', nome: 'Serpro IA (análise fiscal)' },
         ],
       });

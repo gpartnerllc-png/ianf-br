@@ -1344,6 +1344,14 @@ const SERPRO_SERVICOS = {
   contador: { main: false, extras: [['operacao', 'select', [['Consultar', 'Consultar'], ['Declarar', 'Declarar'], ['Emitir', 'Emitir'], ['Monitorar', 'Monitorar'], ['Apoiar', 'Apoiar']]], ['jwt', 'input', 'JWT token (procuração e-CAC)'], ['dados', 'textarea', 'DadosEntrada (JSON)']] },
   carimbo: { main: false, extras: [['base64', 'textarea', 'Timestamp em base64 (header x-signature)'], ['document', 'textarea', 'Documento original (JSON) — opcional']] },
   ia: { main: false, extras: [['prompt', 'textarea', 'Ex.: analise o CNPJ 27.865.757/0001-02 e aponte riscos fiscais']] },
+  cartorio: { main: true, ph: 'CPF ou CNPJ', extras: [['modo', 'select', [['cpf', 'CPF (pessoa física)'], ['basica', 'CNPJ — Básica'], ['qsa', 'CNPJ — Quadro Societário'], ['empresa', 'CNPJ — Empresa']]]] },
+  renda: { main: false, extras: [['tipo', 'select', [['consultar', 'Consultar (token)'], ['autorizacoes', 'Autorizações (contratante/titular)'], ['status', 'Status do serviço']]], ['token', 'input', 'Token de autorização (e-CAC → Compartilha)'], ['contratante', 'input', 'CNPJ do contratante (14 dígitos)'], ['titular', 'input', 'CPF do titular dos dados (11 dígitos)']] },
+  restituicao: { main: false, extras: [['tipo', 'select', [['consultar', 'Consultar (token)'], ['autorizacoes', 'Autorizações (contratante/titular)'], ['status', 'Status do serviço']]], ['token', 'input', 'Token de autorização (e-CAC → Compartilha)'], ['contratante', 'input', 'CNPJ do contratante (14 dígitos)'], ['titular', 'input', 'CPF do titular dos dados (11 dígitos)']] },
+  datavalid: { main: true, ph: '000.000.000-00', extras: [['nome', 'input', 'Nome completo (opcional — valida o nome)'], ['nasc', 'input', 'Nascimento dd/mm/aaaa (opcional — valida a data)'], ['rfb', 'check', 'Comparar com a base da Receita Federal (RFB)'], ['senatran', 'check', 'Comparar com a base da Senatran (CNH)']] },
+  'datavalid-status': { main: false },
+  biovalid: { main: true, ph: '000.000.000-00', extras: [['servico', 'select', [['token', 'Gerar token (biometria)'], ['liveness', 'Prova de vida (selfie)']]], ['expira', 'input', 'Validade do token em minutos (opcional)'], ['tentativas', 'input', 'Qtd de tentativas (opcional)'], ['pin', 'input', 'PIN retornado no token (obrigatório p/ liveness)'], ['device', 'input', 'Identificador do dispositivo (obrigatório p/ liveness)'], ['sexo', 'input', 'Sexo: M ou F (liveness)'], ['selfie', 'textarea', 'Selfie em base64 (liveness)']] },
+  antecipa: { main: true, ph: 'CPF ou CNPJ do fornecedor', extras: [['tipo', 'select', [['avaliacao', 'Avaliação do fornecedor'], ['contratos', 'Execuções de contratos'], ['ordembancaria', 'Ordem bancária'], ['cotacoes', 'Cotações disponíveis'], ['proposta', 'Proposta de cotação']]], ['id', 'input', 'ID do contrato / ordem bancária / cotação']] },
+  'nfe-push': { main: false, extras: [['tipo', 'select', [['status', 'Status da API NF-e'], ['listar', 'Listar monitoramentos'], ['criar', 'Criar monitoramento (chaves abaixo)'], ['excluir', 'Excluir monitoramento (id abaixo)']]], ['chaves', 'textarea', 'Chaves de acesso (uma por linha, 1 a 500)'], ['id', 'input', 'ID do monitoramento (excluir)']] },
 };
 
 function serproExtra(id) {
@@ -1471,6 +1479,65 @@ async function consultarSerpro() {
       }
       const data = await api('/integracao/serpro?acao=carimbo', { method: 'POST', body: JSON.stringify({ base64, document }) });
       el.innerHTML = `<h4>Carimbo de Tempo</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.verificacao)}`;
+      return;
+    }
+
+    if (svc === 'renda' || svc === 'restituicao') {
+      const tipo = serproExtra('tipo')?.value || 'consultar';
+      const token = (serproExtra('token')?.value || '').trim();
+      const contratante = (serproExtra('contratante')?.value || '').replace(/\D/g, '');
+      const titular = (serproExtra('titular')?.value || '').replace(/\D/g, '');
+      if (tipo === 'consultar' && !token) {
+        el.innerHTML = '<p class="form-error">Informe o token de autorização (e-CAC → Compartilha).</p>';
+        return;
+      }
+      if (tipo === 'autorizacoes' && (contratante.length !== 14 || titular.length !== 11)) {
+        el.innerHTML = '<p class="form-error">CNPJ do contratante (14) e CPF do titular (11) são obrigatórios.</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=${svc}&tipo=${tipo}&token=${encodeURIComponent(token)}&contratante=${contratante}&titular=${titular}`);
+      const titulo = svc === 'renda' ? 'Renda PF (IRPF)' : 'Restituição IRPF';
+      el.innerHTML = `<h4>${titulo} · ${ddEsc(tipo)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.renda || data.restituicao)}`;
+      return;
+    }
+
+    if (svc === 'datavalid-status') {
+      const data = await api('/integracao/serpro?acao=datavalid-status');
+      el.innerHTML = `<h4>Datavalid · Status</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.status)}`;
+      return;
+    }
+
+    if (svc === 'nfe-push') {
+      const tipo = serproExtra('tipo')?.value || 'status';
+      const chaves = (serproExtra('chaves')?.value || '').trim();
+      const id = (serproExtra('id')?.value || '').trim();
+      if (tipo === 'criar' && !chaves) {
+        el.innerHTML = '<p class="form-error">Informe as chaves de acesso (uma por linha).</p>';
+        return;
+      }
+      if (tipo === 'excluir' && !id) {
+        el.innerHTML = '<p class="form-error">Informe o ID do monitoramento.</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=nfe-push&tipo=${tipo}${tipo === 'excluir' ? '&id=' + encodeURIComponent(id) : ''}`, { method: 'POST', body: JSON.stringify({ chaves, id }) });
+      el.innerHTML = `<h4>NF-e · Monitoramento (push)</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.push)}`;
+      return;
+    }
+
+    if (svc === 'antecipa') {
+      const tipo = serproExtra('tipo')?.value || 'avaliacao';
+      const id = (serproExtra('id')?.value || '').trim();
+      const ni = ($('serproInput')?.value || '').replace(/\D/g, '');
+      if (tipo === 'avaliacao' && ni.length !== 11 && ni.length !== 14) {
+        el.innerHTML = '<p class="form-error">Informe o CPF (11) ou CNPJ (14) do fornecedor.</p>';
+        return;
+      }
+      if (['contratos', 'ordembancaria', 'proposta'].includes(tipo) && !id) {
+        el.innerHTML = '<p class="form-error">Informe o ID.</p>';
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=antecipa&tipo=${tipo}&ni=${ni}&id=${encodeURIComponent(id)}`);
+      el.innerHTML = `<h4>Antecipa Gov · ${ddEsc(tipo)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.antecipa)}`;
       return;
     }
 
@@ -1607,6 +1674,65 @@ async function consultarSerpro() {
         data = await api(`/integracao/serpro?acao=comex&servico=habitacao&cnpj=${valor}`, { method: 'POST', body: JSON.stringify({ jwtToken: jwt }) });
       }
       el.innerHTML = `<h4>Integra Comex · ${ddEsc(servico)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.comex)}`;
+      return;
+    }
+
+    if (svc === 'cartorio') {
+      const modo = serproExtra('modo')?.value || 'basica';
+      const esperado = modo === 'cpf' ? 11 : 14;
+      if (valor.length !== esperado) {
+        el.innerHTML = `<p class="form-error">${modo === 'cpf' ? 'CPF inválido (11 dígitos).' : 'CNPJ inválido (14 dígitos).'}</p>`;
+        return;
+      }
+      const data = await api(`/integracao/serpro?acao=cartorio&ni=${valor}&modo=${modo}`);
+      el.innerHTML = `<h4>Cartório Data · ${ddEsc(modo)}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.consulta)}`;
+      return;
+    }
+
+    if (svc === 'datavalid') {
+      if (valor.length !== 11) {
+        el.innerHTML = '<p class="form-error">CPF inválido (11 dígitos).</p>';
+        return;
+      }
+      const nome = (serproExtra('nome')?.value || '').trim();
+      const nascRaw = (serproExtra('nasc')?.value || '').replace(/\D/g, '');
+      const m = /^(\d{2})(\d{2})(\d{4})$/.exec(nascRaw);
+      const nasc = nascRaw.length === 8 && !m ? nascRaw : (m ? m[1] + m[2] + m[3] : '');
+      if (nascRaw && nasc.length !== 8) {
+        el.innerHTML = '<p class="form-error">Nascimento inválido (dd/mm/aaaa).</p>';
+        return;
+      }
+      const rfb = serproExtra('rfb')?.checked === true;
+      const senatran = serproExtra('senatran')?.checked === true;
+      const data = await api('/integracao/serpro?acao=datavalid', { method: 'POST', body: JSON.stringify({ cpf: valor, nome, nasc, rfb, senatran }) });
+      el.innerHTML = `<h4>Datavalid · Validação</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.validacao)}`;
+      return;
+    }
+
+    if (svc === 'biovalid') {
+      if (valor.length !== 11) {
+        el.innerHTML = '<p class="form-error">CPF inválido (11 dígitos).</p>';
+        return;
+      }
+      const servico = serproExtra('servico')?.value || 'token';
+      const pin = (serproExtra('pin')?.value || '').trim();
+      const device = (serproExtra('device')?.value || '').trim();
+      const selfie = (serproExtra('selfie')?.value || '').trim();
+      if (servico === 'liveness' && (!pin || !device || !selfie)) {
+        el.innerHTML = '<p class="form-error">PIN, dispositivo e selfie (base64) são obrigatórios na prova de vida.</p>';
+        return;
+      }
+      const data = await api('/integracao/serpro?acao=biovalid', {
+        method: 'POST',
+        body: JSON.stringify({
+          cpf: valor, servico,
+          expiraEm: (serproExtra('expira')?.value || '').trim(),
+          tentativas: (serproExtra('tentativas')?.value || '').trim(),
+          pin, device, selfie,
+          sexo: (serproExtra('sexo')?.value || '').trim().toUpperCase(),
+        }),
+      });
+      el.innerHTML = `<h4>BioValid · ${servico === 'liveness' ? 'Prova de vida' : 'Token'}</h4><p class="muted small">${ddEsc(data.fonte || '')}</p>${ddBloque(data.biovalid)}`;
       return;
     }
 

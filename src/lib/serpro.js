@@ -1,5 +1,6 @@
 // Cliente Serpro - APIs governamentais oficiais
-// CNPJ v2 · CPF v3 · NF-e · CND · DUE · Faturamento · Compras · Integra Contador · Carimbo de Tempo · Integra Comex · Dívida Ativa · Serpro IA
+// CNPJ v2 · CPF v3 · NF-e (consulta + push) · CND · DUE · Faturamento · Compras · Integra Contador · Carimbo de Tempo · Integra Comex · Dívida Ativa · Serpro IA
+// Cartório Data (CPF/CNPJ v2) · Renda PF · Restituição IRPF · Datavalid · BioValid · Antecipa Gov
 // Requer assinatura ativa no portal: https://loja.serpro.gov.br
 // Credenciais via secrets: SERPRO_CONSUMER_KEY / SERPRO_CONSUMER_SECRET
 // Token OAuth2 renovado automaticamente (cache em KV 'serpro:token')
@@ -79,6 +80,36 @@ async function serproRequest(env, path, { method = 'GET', body = null, headers =
     if (!res.ok) {
       if (res.status === 403 && /subscription/i.test(String(data?.description || data?.message || ''))) {
         return { ok: false, code: 'SERPRO_SEM_ASSINATURA', message: 'Credenciais válidas, mas este produto Serpro não está assinado para a sua conta. Assine em loja.serpro.gov.br e vincule a API ao consumer.', status: res.status };
+      }
+      return { ok: false, code: 'SERPRO_ERRO', message: data?.description || data?.message || `Erro ${res.status}`, status: res.status };
+    }
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, code: 'SERPRO_REDE', message: 'Falha de conexão com o Serpro: ' + e.message };
+  }
+}
+
+// Ambientes de demonstração (chave Bearer pública das docs em apicenter.estaleiro.serpro.gov.br)
+// Usada apenas quando o secret SERPRO_TRIAL_TOKEN está definido; sem ele, cai no OAuth2 normal.
+async function trialRequest(env, path, { method = 'GET', body = null, headers = {} } = {}) {
+  const t = env.SERPRO_TRIAL_TOKEN;
+  if (!t) return serproRequest(env, path, { method, body, headers });
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${t}`, Accept: 'application/json', ...headers },
+  };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  try {
+    const res = await fetch(`${GATEWAY}${path}`, opts);
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { /* */ }
+    if (!res.ok) {
+      if (res.status === 403 && /subscription/i.test(String(data?.description || data?.message || ''))) {
+        return { ok: false, code: 'SERPRO_SEM_ASSINATURA', message: 'Produto não assinado no portal loja.serpro.gov.br.', status: res.status };
       }
       return { ok: false, code: 'SERPRO_ERRO', message: data?.description || data?.message || `Erro ${res.status}`, status: res.status };
     }
@@ -185,4 +216,73 @@ export const serpro = {
       method: 'POST',
       body: { prompt, contexto },
     }),
+  // Consulta CPF/CNPJ v2 (Cartório Data) - modos cpf | basica | qsa | empresa
+  // Com SERPRO_TRIAL_TOKEN usa o ambiente de demonstração /consulta-cpf-cnpj-trial/v2
+  consultarCpfCnpj: (env, modo, ni) => {
+    const trial = Boolean(env.SERPRO_TRIAL_TOKEN);
+    const base = env.SERPRO_CPF_CNPJ_PATH || (trial ? '/consulta-cpf-cnpj-trial/v2' : '/consulta-cpf-cnpj/v2');
+    const m = ['cpf', 'basica', 'qsa', 'empresa'].includes(modo) ? modo : 'basica';
+    return trialRequest(env, `${base}/${m}/${ni}`);
+  },
+  // Renda PF (Declaração IRPF via Compartilha e-CAC)
+  rendaCpf: (env, token) =>
+    serproRequest(env, `${env.SERPRO_RENDA_PATH || '/consulta-receita-federal-renda-cpf-hom'}/v1/Consultar/${token}`),
+  rendaAutorizacoes: (env, niContratante, niTitularDados) =>
+    serproRequest(env, `${env.SERPRO_RENDA_PATH || '/consulta-receita-federal-renda-cpf-hom'}/v1/Autorizacoes/${niContratante}/${niTitularDados}`),
+  rendaStatus: (env) =>
+    serproRequest(env, `${env.SERPRO_RENDA_PATH || '/consulta-receita-federal-renda-cpf-hom'}/v1/status`),
+  // Restituição do IRPF
+  restituicaoCpf: (env, token) =>
+    serproRequest(env, `${env.SERPRO_RESTITUICAO_PATH || '/consulta-receita-federal-restituicao-cpf-hom'}/v1/Consultar/${token}`),
+  restituicaoAutorizacoes: (env, niContratante, niTitularDados) =>
+    serproRequest(env, `${env.SERPRO_RESTITUICAO_PATH || '/consulta-receita-federal-restituicao-cpf-hom'}/v1/Autorizacoes/${niContratante}/${niTitularDados}`),
+  restituicaoStatus: (env) =>
+    serproRequest(env, `${env.SERPRO_RESTITUICAO_PATH || '/consulta-receita-federal-restituicao-cpf-hom'}/v1/status`),
+  // Datavalid v5 - validação de identidade (demo: /datavalid-demonstracao)
+  datavalidValidar: (env, payload) => {
+    const trial = Boolean(env.SERPRO_TRIAL_TOKEN);
+    const base = env.SERPRO_DATAVALID_PATH || (trial ? '/datavalid-demonstracao' : '/datavalid');
+    return trialRequest(env, `${base}/v5/pessoa-fisica/validacao`, { method: 'POST', body: payload });
+  },
+  datavalidStatus: (env) => {
+    const trial = Boolean(env.SERPRO_TRIAL_TOKEN);
+    const base = env.SERPRO_DATAVALID_PATH || (trial ? '/datavalid-demonstracao' : '/datavalid');
+    return trialRequest(env, `${base}/v5/status`);
+  },
+  // BioValid - biometria facial (token + prova de vida)
+  biovalidToken: (env, { cpf, expiraEm = '', tentativas = '' }) => {
+    const qs = new URLSearchParams({ cpf });
+    if (expiraEm) qs.set('expira_em', expiraEm);
+    if (tentativas) qs.set('qtd_tentativas', tentativas);
+    return trialRequest(env, `${env.SERPRO_BIOVALID_PATH || '/biovalid/v1'}/token?${qs.toString()}`, { method: 'POST' });
+  },
+  biovalidLiveness: (env, { cpf, pin, device, selfie = '', sexo = '', cnh = '' }) => {
+    const body = {};
+    if (selfie) body.selfie = selfie;
+    if (sexo) body.sexo = sexo;
+    if (cnh) body.cnh = cnh;
+    return trialRequest(env, `${env.SERPRO_BIOVALID_PATH || '/biovalid/v1'}/liveness`, {
+      method: 'PUT',
+      body,
+      headers: { 'x-cpf': cpf, 'x-pin': pin, 'x-device': device },
+    });
+  },
+  // Antecipa Gov - operações de leitura (demo: /antecipagov-trial)
+  antecipaLer: (env, sub) => {
+    const trial = Boolean(env.SERPRO_TRIAL_TOKEN);
+    const base = env.SERPRO_ANTECIPA_PATH || (trial ? '/antecipagov-trial' : '/antecipagov');
+    return trialRequest(env, `${base}${sub}`);
+  },
+  // NF-e push - status da API e monitoramento de chaves de acesso
+  nfeStatus: (env) =>
+    trialRequest(env, `${env.SERPRO_NFE_PATH || '/consulta-nfe-df/api/v1'}/status`),
+  nfePushListar: (env) =>
+    trialRequest(env, `${env.SERPRO_NFE_PATH || '/consulta-nfe-df/api/v1'}/push/solicitacoes`),
+  nfePushCriar: (env, chaves) =>
+    trialRequest(env, `${env.SERPRO_NFE_PATH || '/consulta-nfe-df/api/v1'}/push/solicitacoes`, {
+      method: 'POST',
+      body: { chavesMonitoracao: chaves },
+    }),
+  nfePushExcluir: (env, id) =>
+    trialRequest(env, `${env.SERPRO_NFE_PATH || '/consulta-nfe-df/api/v1'}/push/solicitacoes/${id}`, { method: 'DELETE' }),
 };

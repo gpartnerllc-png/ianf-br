@@ -410,25 +410,39 @@
                     <div id="dd-result" class="result-card mt-3"></div>
                 </div>
                 <div class="panel glass">
-                    <h3 class="panel-title">🇧🇷 Serpro <span class="panel-sub">Bases oficiais do governo · 14 serviços</span></h3>
-                    <p class="muted small">Receita Federal (CNPJ/CPF/NF-e), PGFN (Dívida Ativa/CND), DUE, Faturamento Compartilha, Compras.gov.br, Integra Contador, Carimbo de Tempo, Integra Comex e Serpro IA — APIs oficiais do Serpro (assinatura em loja.serpro.gov.br).</p>
+                    <h3 class="panel-title">🇧🇷 Serpro <span class="panel-sub">Bases oficiais do governo · 22 serviços</span></h3>
+                    <p class="muted small">Receita Federal (CNPJ/CPF/NF-e/Renda/Restituição), PGFN (Dívida Ativa/CND), Cartório Data, Datavalid/BioValid (biometria), Antecipa Gov, DUE, Faturamento Compartilha, Compras.gov.br, Integra Contador, Carimbo de Tempo, Integra Comex e Serpro IA — APIs oficiais do Serpro (assinatura em loja.serpro.gov.br).</p>
                     <div class="search-row mt-3">
                         <select class="field" id="serproServico" style="max-width:300px" onchange="UI.serproServicoChange()">
                             <optgroup label="Cadastral (Receita Federal)">
                                 <option value="cnpj">Consulta CNPJ</option>
                                 <option value="cpf">Consulta CPF (v3)</option>
                                 <option value="situacao-cpf">Situação do CPF</option>
+                                <option value="cartorio">Cartório Data (CPF/CNPJ)</option>
                             </optgroup>
                             <optgroup label="Fiscal (Receita / PGFN)">
                                 <option value="nfe">Consulta NF-e (chave)</option>
+                                <option value="nfe-push">NF-e Monitoramento (push)</option>
                                 <option value="cnd">CND - Certidão Negativa</option>
                                 <option value="divida-ativa">Dívida Ativa da União</option>
                                 <option value="faturamento">Faturamento (Compartilha)</option>
                                 <option value="faturamento-autorizacoes">Autorizações de Faturamento</option>
                             </optgroup>
+                            <optgroup label="IRPF (Compartilha e-CAC)">
+                                <option value="renda">Renda PF (Declaração)</option>
+                                <option value="restituicao">Restituição IRPF</option>
+                            </optgroup>
+                            <optgroup label="Identidade Digital (biometria)">
+                                <option value="biovalid">BioValid (biometria facial)</option>
+                                <option value="datavalid">Datavalid (validação)</option>
+                                <option value="datavalid-status">Datavalid (status)</option>
+                            </optgroup>
                             <optgroup label="Comércio Exterior">
                                 <option value="due">DUE (Exportação)</option>
                                 <option value="comex">Integra Comex</option>
+                            </optgroup>
+                            <optgroup label="Financeiro Gov">
+                                <option value="antecipa">Antecipa Gov</option>
                             </optgroup>
                             <optgroup label="Serviços">
                                 <option value="compras">Compras.gov.br</option>
