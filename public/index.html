@@ -404,6 +404,81 @@
                     <div id="serasa-result" class="result-card mt-3"></div>
                 </div>
                 <div class="panel glass">
+                    <h3 class="panel-title">🛡️ Serasa Experian <span class="panel-sub">Consultas completas + Negativações</span></h3>
+                    <p class="muted small">Score e negativas (CredNet), passivo concentrado (Concentre), limite recomendado (Recomenda), consulta cadastral básica, negativação de credores, saldo e extrato de consumo da conta.</p>
+                    <div class="search-row mt-3">
+                        <select class="field" id="soaServico" onchange="UI.soaServicoChange()"></select>
+                        <input class="field" id="soaDoc" placeholder="CPF (11) ou CNPJ (14) dígitos">
+                    </div>
+                    <div class="search-row mt-3">
+                        <input class="field" id="soaUf" maxlength="2" placeholder="UF (CredNet)">
+                        <input class="field" id="soaNasc" placeholder="Nascimento AAAA-MM-DD (cadastro PF)">
+                        <input class="field" id="soaValor" inputmode="decimal" placeholder="Valor (R$)">
+                    </div>
+                    <div class="search-row mt-3">
+                        <input class="field" id="soaUnique" placeholder="uniqueID da negativação (UUID)">
+                        <input class="field" id="soaBaixa" inputmode="numeric" placeholder="Código de baixa (ver lista)">
+                        <select class="field" id="soaCondicao" style="max-width:220px">
+                            <option value="1">1 · Ativas</option>
+                            <option value="0">0 · Pendentes</option>
+                            <option value="4">4 · Em processamento</option>
+                            <option value="9">9 · Baixadas</option>
+                            <option value="2">2 · Com erro</option>
+                        </select>
+                        <button class="btn btn-gradient" onclick="UI.consultarSoa()">Executar</button>
+                    </div>
+                    <label class="check-row mt-2" id="soaConfirmarWrap"><input type="checkbox" id="soaConfirmar"> Confirmar ação de escrita (negativar / excluir / recarregar)</label>
+                    <div id="soaIncluirWrap" class="mt-3">
+                        <p class="muted small"><b>Negativar devedor.</b> Esta frente restitui o CPF/CNPJ no bureau e só deve ser usada com título exigível e notificação prévia ao devedor (LGPD art. 14 e código de defesa do consumidor).</p>
+                        <div class="dd-sub mt-2">Restrição</div>
+                        <div class="search-row mt-2">
+                            <input class="field" id="soaIxCodigo" placeholder="Código da restrição">
+                            <input class="field" id="soaIxContrato" placeholder="Contrato (opcional)">
+                            <input class="field" id="soaIxNosso" placeholder="Nosso número (opcional)">
+                        </div>
+                        <div class="search-row mt-2">
+                            <input class="field" id="soaIxVencimento" type="date">
+                            <input class="field" id="soaIxValor" inputmode="decimal" placeholder="Valor devido (R$)">
+                        </div>
+                        <div class="dd-sub mt-2">Devedor</div>
+                        <div class="search-row mt-2">
+                            <input class="field" id="soaIvDoc" placeholder="CPF (11) ou CNPJ (14) do devedor">
+                            <input class="field" id="soaIvNome" placeholder="Nome / razão social do devedor">
+                        </div>
+                        <div class="search-row mt-2">
+                            <input class="field" id="soaIvLogra" placeholder="Logradouro">
+                            <input class="field" id="soaIvNumero" placeholder="Número">
+                            <input class="field" id="soaIvBairro" placeholder="Bairro">
+                        </div>
+                        <div class="search-row mt-2">
+                            <input class="field" id="soaIvCidade" placeholder="Cidade">
+                            <input class="field" id="soaIvUf" maxlength="2" placeholder="UF">
+                            <input class="field" id="soaIvCep" placeholder="CEP (8 dígitos)">
+                        </div>
+                    </div>
+                    <div class="btn-row mt-3">
+                        <button class="btn btn-ghost small" onclick="UI.soaSaldo()">Ver saldo da conta</button>
+                        <button class="btn btn-ghost small" onclick="UI.soaExtrato()">Extrato do mês</button>
+                        <button class="btn btn-ghost small" onclick="UI.soaCatalogos()">Códigos de restrição e baixa</button>
+                    </div>
+                    <div id="soa-result" class="result-card mt-3"></div>
+                </div>
+                <div class="panel glass">
+                    <h3 class="panel-title">🧬 Serasa Experian · APIs do Portal <span class="panel-sub">crédito · recomenda · monitoramento · enriquecimento</span></h3>
+                    <p class="muted small">Todos os contratos REST publicados no portal de desenvolvedores: relatórios de crédito PF/PJ (dados avulsos, básico, intermediário, avançado, agrupe, credit rating), Serasa Recomenda, Verificação de Dados (Verify/PEP), Monitoramento (MDCF, Me Proteja, Alerta PME), Saúde Financeira do distribuidor (SDSN) e Infomais. Comece pela demonstração — usa o ambiente de testes público e não cobra do contrato.</p>
+                    <div class="search-row mt-3">
+                        <select class="field" id="sdServico" onchange="UI.sdServicoChange()"></select>
+                        <select class="field" id="sdAmbiente" style="max-width:200px" onchange="UI.sdAmbienteChange()"></select>
+                    </div>
+                    <div id="sdCampos" class="search-row mt-3"></div>
+                    <label class="check-row mt-2" id="sdConfirmarWrap"><input type="checkbox" id="sdConfirmar"> Confirmar: este chamado grava uma proposta no bureau e é cobrado pelo contrato</label>
+                    <div class="btn-row mt-3">
+                        <button class="btn btn-gradient" onclick="UI.consultarSd()">Executar</button>
+                        <button class="btn btn-ghost small" onclick="UI.sdRecarregar()">Recarregar catálogo</button>
+                    </div>
+                    <div id="sd-result" class="result-card mt-3"></div>
+                </div>
+                <div class="panel glass">
                     <h3 class="panel-title">💳 APIBrasil <span class="panel-sub">Dados cadastrais PJ por crédito</span></h3>
                     <p class="muted small">Consulta cadastral de CNPJ e quadro societário pagas por crédito (R$ 0,04 a consulta).</p>
                     <div class="search-row mt-3">

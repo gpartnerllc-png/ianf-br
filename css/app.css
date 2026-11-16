@@ -548,6 +548,10 @@ select.field { appearance: none; cursor: pointer; }
     .lupa-btn { padding: 14px 20px; }
 }
 
+/* ---------- Risco de crédito (bureau) ---------- */
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.check-row input { width: 16px; height: 16px; accent-color: var(--purple-700); }
+
 /* ---------- Responsivo ---------- */
 @media (max-width: 1100px) {
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }

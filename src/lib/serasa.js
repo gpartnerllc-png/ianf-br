@@ -12,7 +12,8 @@ function base(env) {
   return (env.SERASA_BASE_URL || PROD_BASE).replace(/\/+$/, '');
 }
 
-function iamBase(env) {
+function iamBase(env, iamUrl) {
+  if (iamUrl) return iamUrl;
   if (env.SERASA_IAM_BASE_URL) return env.SERASA_IAM_BASE_URL.replace(/\/+$/, '');
   try {
     return `https://${new URL(base(env)).host}/security/iam/v1/client-identities/login`;
@@ -22,16 +23,18 @@ function iamBase(env) {
 }
 
 // Obtém um token válido: KV cache → login client-identities → token manual
-async function obterToken(env) {
+// opts.iamUrl troca o host de auth (sandbox/uat/prod têm IAM próprio); opts.cacheKey separa o cache por ambiente.
+export async function obterToken(env, opts = {}) {
+  const cacheKey = opts.cacheKey || 'serasa:token';
   if (env.SERASA_CLIENT_ID && env.SERASA_CLIENT_SECRET) {
     try {
-      const cached = await env.KV.get('serasa:token');
+      const cached = await env.KV.get(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed.token && parsed.exp > Date.now() + 60_000) return parsed.token;
       }
       const basic = btoa(`${env.SERASA_CLIENT_ID}:${env.SERASA_CLIENT_SECRET}`);
-      const res = await fetch(iamBase(env), {
+      const res = await fetch(iamBase(env, opts.iamUrl), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Basic ${basic}` },
         body: '{}',
@@ -39,7 +42,7 @@ async function obterToken(env) {
       const data = await res.json().catch(() => null);
       if (res.ok && data?.access_token) {
         const ttl = Math.max(60, Number(data.expires_in || 3600) - 120);
-        await env.KV.put('serasa:token', JSON.stringify({ token: data.access_token, exp: Date.now() + ttl * 1000 }), { expirationTtl: ttl }).catch(() => {});
+        await env.KV.put(cacheKey, JSON.stringify({ token: data.access_token, exp: Date.now() + ttl * 1000 }), { expirationTtl: ttl }).catch(() => {});
         return data.access_token;
       }
       const item = Array.isArray(data) ? data[0] : data;
@@ -73,7 +76,8 @@ async function post(env, path, body, retry = true) {
         return post(env, path, body, false);
       }
       if (res.status === 401 || code === '17') {
-        return { ok: false, code: 'SERASA_TOKEN_EXPIRADO', message: `Token Serasa inválido ou expirado. ${msg}`, serasaCode: code };
+        const dica = env.SERASA_CLIENT_ID ? '' : ' O acesso é liberado pela credencial client-identities que a Serasa Experian emite (representante comercial ou Central (11) 3003-7372); o JWT de sessão do portal não é aceito pelas APIs.';
+        return { ok: false, code: 'SERASA_TOKEN_EXPIRADO', message: `Token Serasa inválido ou expirado. ${msg}${dica}`, serasaCode: code };
       }
       return { ok: false, code: 'SERASA_ERRO', status: res.status, message: msg, serasaCode: code };
     }

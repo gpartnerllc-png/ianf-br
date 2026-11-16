@@ -44,7 +44,17 @@ PAYMENT_POS_SCHEME = "infinitepay"
 # Serasa Experian (Verify PF/PJ + Financial Health) e APIBrasil — bases não-secretas
 SERASA_BASE_URL = "https://api.serasaexperian.com.br/id-fraud/verify-id/v1"
 SERASA_IAM_BASE_URL = "https://api.serasaexperian.com.br/security/iam/v1/client-identities/login"
+# Serasa Experian - APIs do portal (crédito PF/PJ, Recomenda, Verify, MDCF, Me Proteja, SDSN, Infomais)
+# Ambientes: demo (mock público) / sandbox / uat / prod. Overrides opcionais por ambiente:
+# SERASA_DEMO_BASE_URL, SERASA_SANDBOX_BASE_URL, SERASA_UAT_BASE_URL, SERASA_PROD_BASE_URL, SERASA_RECOMENDA_BASE_URL
+# CNPJ do consultante enviado em X-Retailer-Document-Id quando o contrato for de distribuidor:
+# SERASA_RETAILER_CNPJ = ""
+SERASA_DEMO_BASE_URL = "https://sandbox-api.serasaexperian.com.br/mock"
 APIBRASIL_BASE_URL = "https://gateway.apibrasil.io/api/v2"
+# SOA Web Services v2 (Serasa Experian: básica, CredNet, Concentre, Recomenda, Negativações)
+# Credenciais da conta via secrets SOA_EMAIL / SOA_SENHA. SOA_AMBIENTE=homolog usa o ambiente de testes.
+SOA_AMBIENTE = "prod"
+SOA_BASE_URL = "https://producao.soawebservices.com.br"
 # DirectData (consultas Big Data por consumo) — token do painel via secret DIRECTDATA_TOKEN
 DIRECTDATA_BASE_URL = "https://apiv3.directd.com.br"
 # Checkout de assinatura (franquia mensal R$ 289,80)
