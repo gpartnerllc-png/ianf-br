@@ -423,6 +423,131 @@ select.field { appearance: none; cursor: pointer; }
 .pausa-overlay.hidden { display: none; }
 .pausa-card { max-width: 480px; width: 92%; text-align: center; padding: 30px; }
 
+/* ---------- Lupa única (busca unificada) ---------- */
+.lupa-hero {
+    position: relative; overflow: hidden;
+    padding: 44px 34px 34px; margin-bottom: 24px; text-align: center;
+    background:
+        radial-gradient(ellipse at 50% -20%, rgba(255, 107, 0, 0.20), transparent 60%),
+        radial-gradient(ellipse at 12% 120%, rgba(124, 58, 237, 0.16), transparent 55%),
+        var(--glass);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 28px 60px -30px rgba(234, 88, 12, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.lupa-hero::before {
+    content: ''; position: absolute; inset: -40% -20% auto; height: 70%;
+    background: conic-gradient(from 180deg at 50% 50%, rgba(255, 107, 0, 0.18), rgba(124, 58, 237, 0.14), rgba(37, 99, 235, 0.16), rgba(255, 107, 0, 0.18));
+    filter: blur(46px); opacity: 0.55; pointer-events: none;
+    animation: lupa-aurora 16s linear infinite;
+}
+@keyframes lupa-aurora { to { transform: rotate(360deg); } }
+.lupa-ico { position: relative; font-size: 54px; line-height: 1; margin-bottom: 10px; filter: drop-shadow(0 10px 18px rgba(234, 88, 12, 0.35)); animation: lupa-bob 3.4s ease-in-out infinite; }
+@keyframes lupa-bob { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-9px) rotate(4deg); } }
+.lupa-titulo { position: relative; font-size: clamp(24px, 4vw, 42px); font-weight: 900; letter-spacing: -1px; color: var(--ink); line-height: 1.05; }
+.lupa-titulo span { background: linear-gradient(110deg, var(--orange-500), var(--purple-700), var(--blue-600)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lupa-sub { position: relative; margin: 10px auto 26px; max-width: 620px; color: var(--text-muted); font-size: 14px; font-weight: 600; }
+.lupa-busca {
+    position: relative; display: flex; gap: 12px; align-items: stretch;
+    max-width: 780px; margin: 0 auto; padding: 10px;
+    background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(15, 23, 42, 0.14);
+    border-radius: 20px; box-shadow: 0 18px 40px -22px rgba(15, 23, 42, 0.5);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.lupa-busca:focus-within {
+    border-color: var(--orange-500);
+    box-shadow: 0 0 0 4px rgba(255, 107, 0, 0.16), 0 22px 48px -20px rgba(234, 88, 12, 0.55);
+}
+.lupa-input {
+    flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+    font-family: var(--mono); font-size: clamp(15px, 2.2vw, 21px); font-weight: 700;
+    letter-spacing: 1.5px; color: var(--ink); padding: 12px 10px;
+}
+.lupa-input::placeholder { color: rgba(100, 116, 139, 0.75); letter-spacing: 0.6px; font-family: var(--font); font-weight: 600; }
+.lupa-btn {
+    border: none; cursor: pointer; white-space: nowrap;
+    padding: 0 30px; border-radius: 14px; font-weight: 900; font-size: 14px; letter-spacing: 1.6px;
+    color: #fff; background: linear-gradient(120deg, var(--orange-500), var(--orange-600) 55%, var(--purple-700));
+    box-shadow: 0 14px 30px -12px rgba(234, 88, 12, 0.7);
+    transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+}
+.lupa-btn:hover { transform: translateY(-2px); filter: saturate(1.15); box-shadow: 0 20px 38px -14px rgba(234, 88, 12, 0.8); }
+.lupa-btn:active { transform: translateY(0); }
+.lupa-chips { position: relative; display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; margin-top: 18px; }
+.lupa-chip {
+    font-size: 11px; font-weight: 800; letter-spacing: 0.6px; padding: 7px 14px; border-radius: 999px;
+    color: var(--text-muted); background: rgba(255, 255, 255, 0.7);
+    border: 1px dashed rgba(15, 23, 42, 0.2); transition: all 0.18s;
+}
+.lupa-chip.ativa {
+    color: #fff; border-style: solid; border-color: transparent;
+    background: linear-gradient(120deg, var(--orange-500), var(--purple-700));
+    box-shadow: 0 8px 20px -8px rgba(124, 58, 237, 0.7); transform: translateY(-1px);
+}
+.lupa-detect { position: relative; margin-top: 14px; font-weight: 700; color: var(--ink-soft); }
+
+.lupa-results { display: flex; flex-direction: column; gap: 18px; }
+.lupa-header-res {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 16px 20px; border-radius: 16px;
+    background: linear-gradient(120deg, rgba(15, 23, 42, 0.94), rgba(76, 29, 149, 0.9));
+    color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
+    box-shadow: 0 20px 44px -22px rgba(15, 23, 42, 0.8);
+}
+.lupa-header-res b { font-family: var(--mono); letter-spacing: 0.5px; }
+.lupa-secao {
+    margin-bottom: 0; padding: 20px 22px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 5px 5px 0 rgba(15, 23, 42, 0.09), 0 18px 40px -28px rgba(15, 23, 42, 0.45);
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+}
+.lupa-secao:hover { transform: translateY(-2px); border-color: rgba(234, 88, 12, 0.4); box-shadow: 7px 7px 0 rgba(234, 88, 12, 0.16), 0 26px 48px -26px rgba(234, 88, 12, 0.5); }
+.lupa-secao-head { display: flex; align-items: center; gap: 13px; margin-bottom: 14px; }
+.lupa-secao-ico {
+    display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 42px; border-radius: 13px; font-size: 20px;
+    background: linear-gradient(135deg, rgba(255, 107, 0, 0.18), rgba(124, 58, 237, 0.16));
+    border: 1px solid rgba(234, 88, 12, 0.3);
+}
+.lupa-secao-tit h4 { font-size: 15px; font-weight: 900; color: var(--ink); letter-spacing: -0.2px; }
+.lupa-custo {
+    margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 800; padding: 5px 11px;
+    border-radius: 999px; color: #9a3412; background: rgba(251, 146, 60, 0.22);
+    border: 1px solid rgba(234, 88, 12, 0.35); white-space: nowrap;
+}
+.lupa-secao-body { font-size: 12.8px; color: var(--text); }
+.lupa-secao-body h4 { font-size: 14px; font-weight: 900; margin-bottom: 6px; color: var(--ink); }
+.lupa-secao-body .kv { display: flex; justify-content: space-between; gap: 14px; padding: 6px 0; border-bottom: 1px dashed rgba(15, 23, 42, 0.1); color: var(--text-muted); }
+.lupa-secao-body .kv b { color: var(--ink); font-weight: 700; text-align: right; }
+.lupa-secao-body .kv:last-child { border-bottom: none; }
+.lupa-secao-body .dd-sub { margin: 6px 0; padding: 8px 10px; border: 1px dashed rgba(15, 23, 42, 0.15); border-radius: 10px; background: rgba(255, 255, 255, 0.55); }
+.lupa-status { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; color: var(--ink); }
+.lupa-skeleton { display: flex; flex-direction: column; gap: 9px; padding: 4px 0; }
+.lupa-skeleton i {
+    height: 13px; border-radius: 7px;
+    background: linear-gradient(90deg, rgba(15, 23, 42, 0.06) 25%, rgba(234, 88, 12, 0.20) 50%, rgba(15, 23, 42, 0.06) 75%);
+    background-size: 220% 100%; animation: lupa-shimmer 1.25s linear infinite;
+}
+.lupa-skeleton i:nth-child(2) { width: 78%; }
+.lupa-skeleton i:nth-child(3) { width: 54%; }
+@keyframes lupa-shimmer { to { background-position: -220% 0; } }
+
+.lupa-avancado { margin-top: 26px; }
+.lupa-avancado > summary {
+    cursor: pointer; list-style: none; user-select: none;
+    padding: 13px 18px; border-radius: 14px; font-size: 12px; font-weight: 900; letter-spacing: 0.8px;
+    text-transform: uppercase; color: var(--ink-soft);
+    background: rgba(255, 255, 255, 0.66); border: 1px dashed rgba(15, 23, 42, 0.22);
+    transition: all 0.18s;
+}
+.lupa-avancado > summary::-webkit-details-marker { display: none; }
+.lupa-avancado > summary:hover { color: var(--orange-600); border-color: rgba(234, 88, 12, 0.5); background: rgba(255, 244, 230, 0.9); }
+.lupa-avancado[open] > summary { border-style: solid; margin-bottom: 18px; }
+
+@media (max-width: 640px) {
+    .lupa-hero { padding: 30px 16px 26px; }
+    .lupa-busca { flex-direction: column; padding: 8px; }
+    .lupa-btn { padding: 14px 20px; }
+}
+
 /* ---------- Responsivo ---------- */
 @media (max-width: 1100px) {
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }

@@ -2003,6 +2003,348 @@ async function consultarSerpro() {
   }
 }
 
+// ============================================================
+// BUSCA ÚNICA — uma lupa, todas as bases (nomes de fornecedores
+// ficam no backend; o cliente vê só o retrato completo)
+// ============================================================
+const LUPA = { doc: '', tipo: '', secoes: [], memo: {} };
+
+// Cada frente reusa a mesma chamada: um único número digitado = uma consulta por base.
+function lupaMemo(key, factory) {
+  if (!LUPA.memo[key]) {
+    LUPA.memo[key] = Promise.resolve().then(factory).catch((e) => { delete LUPA.memo[key]; throw e; });
+  }
+  return LUPA.memo[key];
+}
+
+function lupaDetectarTipo(v) {
+  const d = String(v || '').replace(/\D/g, '');
+  if (d.length === 8) return { tipo: 'cep', doc: d };
+  if (d.length === 11) return { tipo: 'cpf', doc: d };
+  if (d.length === 14) return { tipo: 'cnpj', doc: d };
+  if (d.length === 44) return { tipo: 'nfe', doc: d };
+  return { tipo: d.length ? 'indefinido' : 'vazio', doc: d };
+}
+
+function lupaMascara(tipo, doc) {
+  if (tipo === 'cep') return `${doc.slice(0, 5)}-${doc.slice(5)}`;
+  if (tipo === 'cpf') return `${doc.slice(0, 3)}.${doc.slice(3, 6)}.${doc.slice(6, 9)}-${doc.slice(9)}`;
+  if (tipo === 'cnpj') return `${doc.slice(0, 2)}.${doc.slice(2, 5)}.${doc.slice(5, 8)}/${doc.slice(8, 12)}-${doc.slice(12)}`;
+  if (tipo === 'nfe') return (doc.match(/.{1,4}/g) || []).join(' ');
+  return doc;
+}
+
+function lupaDetectarChange() {
+  const { tipo } = lupaDetectarTipo($('lupaInput').value);
+  const mapa = {
+    cep: '📍 CEP detectado — o endereço completo será localizado.',
+    cpf: '👤 CPF detectado — todas as frentes de pessoa física serão varridas.',
+    cnpj: '🏢 CNPJ detectado — todas as frentes de pessoa jurídica serão varridas.',
+    nfe: '🧾 Chave de NF-e detectada — o documento será localizado nas bases oficiais.',
+    indefinido: 'Digite 8 dígitos (CEP), 11 (CPF), 14 (CNPJ) ou 44 (chave de NF-e).',
+    vazio: 'Detectamos automaticamente o que você digitou.',
+  };
+  const el = $('lupaDetect');
+  if (el) el.textContent = mapa[tipo] || mapa.vazio;
+  document.querySelectorAll('.lupa-chip').forEach((c) => c.classList.toggle('ativa', c.dataset.t === tipo));
+}
+
+function lupaFonteGen(d, txt) { return { ...d, fonte: txt }; }
+
+// Os fornecedores ficam no backend: nenhuma mensagem exibida na lupa pode trazê-los.
+const LUPA_NEUTRO = [
+  [/loja\.serpro\.gov\.br\/?\S*/gi, ''],
+  [/(app|gateway)\.apibrasil\.io\S*/gi, ''],
+  [/app\.directd\.com\.br\S*/gi, ''],
+  [/(api\.)?seras(aexperian|saexperian)\.com\.br\S*/gi, ''],
+  [/https?:\/\/\S+/gi, ''],
+  [/\bdirect\s*data\b|\bdirectd\b/gi, 'base ampliada'],
+  [/api\s*brasil/gi, 'base de crédito'],
+  [/serasa\s+experian|\bserasa\b/gi, 'verificação de risco'],
+  [/infinite\s*pay/gi, 'meio de pagamento'],
+  [/\bserpro\b/gi, 'base oficial'],
+];
+
+function lupaNeutro(txt) {
+  let s = String(txt || '');
+  for (const [re, rep] of LUPA_NEUTRO) s = s.replace(re, rep);
+  return s.replace(/\s{2,}/g, ' ').replace(/\s*-\s*$/g, '').trim();
+}
+
+function lupaCnpjOficial(doc) {
+  return lupaMemo('cad', () => api(`/integracao/serpro?acao=cnpj&cnpj=${doc}`));
+}
+
+async function lupaRunCnpjOficial(doc) {
+  const d = await lupaCnpjOficial(doc);
+  return serproRenderCnpj(d.resumo, lupaFonteGen(d, 'Base oficial · Receita Federal'));
+}
+
+function lupaCpfBasico(doc) {
+  return lupaMemo('basico', () => api(`/integracao/cpf?cpf=${doc}`));
+}
+
+async function lupaRunCpfBasico(doc) {
+  const d = await lupaCpfBasico(doc);
+  return `
+    <div class="kv"><span>CPF</span><b>${lupaMascara('cpf', doc)}</b></div>
+    <div class="kv"><span>Estrutura</span><b>${d.cpf?.isValid ? 'Dígitos verificadores válidos ✓' : 'Estrutura inválida ✗'}</b></div>
+    ${d.cpf && Object.keys(d.cpf).length > 1 ? ddBloque(d.cpf) : ''}`;
+}
+
+async function lupaRunCpfOficial(doc) {
+  const nasc = ($('lupaNasc')?.value || '').replace(/\D/g, '');
+  if (nasc.length !== 8) { const e = new Error('Informe a data de nascimento (ddmmaaaa) para a consulta oficial.'); e.code = 'NASC'; throw e; }
+  const d = await lupaMemo('oficial', () => api(`/integracao/serpro?acao=cpf&cpf=${doc}&nasc=${nasc}`));
+  return serproRenderCpf(d.resumo, lupaFonteGen(d, 'Base oficial · Receita Federal'));
+}
+
+function lupaDivida(doc) {
+  return lupaMemo('divida', () => api(`/integracao/serpro?acao=divida-ativa&ni=${doc}`));
+}
+
+async function lupaRunDivida(doc) {
+  let d;
+  try {
+    d = await lupaDivida(doc);
+  } catch (e) {
+    if (!/no matching resource|not found|subscription|api subscription/i.test(String(e.message || ''))) throw e;
+    return `<div class="lupa-status"><span class="tag tag-rascunho">Sem cobertura</span><b>A base oficial de dívida ativa não devolve dados para este documento agora.</b></div>
+      <p class="muted small">Use o modo avançado para consultar pelo número da inscrição, ou tente novamente mais tarde — as demais frentes não dependem desta base.</p>`;
+  }
+  const tags = { com_debitos: ['tag-cancelada', '⚠ Com débitos'], regular: ['tag-autorizada', '✓ Regular'], sem_registros: ['tag-rascunho', 'Sem registros'] };
+  const [cls, txt] = tags[d.situacao] || ['tag-rascunho', String(d.situacao || '—')];
+  const rows = (d.inscricoes || []).map((i) => `<div class="kv"><span>${ddEsc(i.origem || 'Inscrição')}${i.numero ? ` · ${ddEsc(i.numero)}` : ''}</span><b>${ddEsc(i.situacao || '—')} — ${fmt(i.valor || 0)}</b></div>`).join('');
+  return `
+    <div class="lupa-status"><span class="tag ${cls}">${txt}</span><b>Total consolidado: ${fmt(d.totalConsolidado || 0)}</b></div>
+    ${rows || '<p class="muted small">Nenhuma inscrição encontrada nesta base.</p>'}`;
+}
+
+const LUPA_SIT = { com_debitos: 'há débitos em aberto', regular: 'sem débitos em aberto', sem_registros: 'sem registros' };
+
+function lupaIndiceHtml(rotulo, pct, linhas) {
+  const cor = pct >= 75 ? '#059669' : pct >= 45 ? '#d97706' : '#b91c1c';
+  return `
+    <div class="lupa-status">
+      <span>${rotulo} <b style="color:${cor}">${pct}%</b></span>
+      <span class="tag ${pct >= 75 ? 'tag-autorizada' : 'tag-rascunho'}">calculado sobre dados oficiais</span>
+    </div>
+    ${linhas.map((l) => `<div class="kv"><span>${ddEsc(l[0])}</span><b>${l[1] ? '✓' : '✗'} ${ddEsc(String(l[2] ?? '—'))}</b></div>`).join('')}`;
+}
+
+async function lupaLinhaDivida(doc) {
+  const d = await lupaDivida(doc).catch(() => null);
+  if (!d) return ['Dívida Ativa da União', false, 'sem retorno agora'];
+  return ['Dívida Ativa da União', d.situacao !== 'com_debitos', `${LUPA_SIT[d.situacao] || d.situacao}${d.totalConsolidado ? ` (${fmt(d.totalConsolidado)})` : ''}`];
+}
+
+async function lupaIndiceCnpj(doc) {
+  const d = await lupaCnpjOficial(doc);
+  const s = d.resumo || d.cnpj || {};
+  const contato = s.email || (s.telefones || [])[0] || '';
+  const linhas = [
+    ['Situação cadastral', !!s.situacao_cadastral, s.situacao_cadastral],
+    ['Data de abertura', !!s.data_abertura, s.data_abertura],
+    ['Natureza jurídica', !!s.natureza_juridica, s.natureza_juridica],
+    ['CNAE principal', !!s.cnae_principal, s.cnae_principal],
+    ['Endereço completo', !!(s.endereco && s.municipio && s.uf), [s.endereco, s.bairro, `${s.municipio || '—'}/${s.uf || '—'}`].filter(Boolean).join(' · ')],
+    ['Contato cadastrado', !!contato, contato],
+    ['Quadro societário', (s.socios || []).length > 0, `${(s.socios || []).length} registrado(s)`],
+    await lupaLinhaDivida(doc),
+  ];
+  return lupaIndiceHtml('Consistência cadastral', Math.round((linhas.filter((l) => l[1]).length / linhas.length) * 100), linhas);
+}
+
+async function lupaIndiceCpf(doc) {
+  const b = await lupaCpfBasico(doc);
+  const off = await (LUPA.memo.oficial || Promise.reject(new Error('sem consulta oficial'))).catch(() => null);
+  const c = off?.resumo || {};
+  const linhas = [
+    ['Estrutura do documento', !!b.cpf?.isValid, b.cpf?.isValid ? 'dígitos verificadores válidos' : 'dígitos inválidos'],
+    ['Órgão emissor', !!b.cpf?.rf, b.cpf?.rf],
+    ['UFs vinculadas', (b.cpf?.ufs || []).length > 0, (b.cpf?.ufs || []).join(', ')],
+  ];
+  if (c.nome || c.situacao) {
+    linhas.push(['Nome na base oficial', !!c.nome, c.nome]);
+    linhas.push(['Situação na base oficial', /ativo|regular/i.test(String(c.situacao || '')), c.situacao]);
+    linhas.push(['Data de nascimento', !!c.nascimento, c.nascimento]);
+  }
+  linhas.push(await lupaLinhaDivida(doc));
+  return lupaIndiceHtml('Consistência cadastral', Math.round((linhas.filter((l) => l[1]).length / linhas.length) * 100), linhas);
+}
+
+async function lupaRunRisco(doc, acao, construir) {
+  let falhaExterna;
+  try {
+    const d = await api(`/integracao/serasa?acao=${acao}`, { method: 'POST', body: JSON.stringify({ document: doc }) });
+    const v = d.verificacao || {};
+    const score = Number(v.verificationScore);
+    const cor = score >= 700 ? '#059669' : score >= 400 ? '#d97706' : '#b91c1c';
+    const grupos = (v.validationGroups || []).map((g) => `<div class="kv"><span>${ddEsc(g.code)} — ${ddEsc(g.message || '')}</span><b>${ddEsc(String(g.rating ?? '—'))}</b></div>`).join('');
+    return `
+      <div class="lupa-status"><span>Score <b style="color:${cor}">${v.verificationScore ?? '—'}</b></span><span>Risco <b>${ddEsc(v.verificationRisk || '—')}</b></span></div>
+      ${grupos || '<p class="muted small">Sem atributos retornados.</p>'}`;
+  } catch (e) {
+    falhaExterna = e;
+  }
+  const alt = await construir().catch(() => null);
+  if (!alt) throw falhaExterna;
+  return `${alt}<p class="muted small mt-2">A verificação externa de risco não está liberada nesta conta (${ddEsc(lupaNeutro(falhaExterna.message) || 'sem credenciais')}). O índice acima é calculado apenas sobre os dados oficiais desta mesma busca — não é score de bureau.</p>`;
+}
+
+function lupaRunDD(endpoint, param, valor) {
+  return async () => {
+    const d = await api('/integracao/directdata?acao=consultar', { method: 'POST', body: JSON.stringify({ endpoint, params: { [param]: valor } }) });
+    return ddBloque(d.retorno);
+  };
+}
+
+function lupaCreditoHtml(d) {
+  const c = d?.dados?.cnpj || {};
+  const end = c.endereco || c.end || {};
+  return `
+    <div class="kv"><span>Razão social</span><b>${ddEsc(c.razao_social || '—')}</b></div>
+    <div class="kv"><span>Situação</span><b>${ddEsc(c.situacao_cadastral || '—')}</b></div>
+    <div class="kv"><span>Endereço</span><b>${ddEsc([end.logradouro, end.numero].filter(Boolean).join(', ') || '—')}</b></div>
+    <div class="kv"><span>Município</span><b>${ddEsc(`${end.municipio || c.municipio || '—'} / ${end.uf || c.uf || '—'}`)}</b></div>
+    ${(c.socios || []).length ? `<div class="kv"><span>Quadro societário</span><b>${c.socios.length} registrado(s)</b></div>` : ''}`;
+}
+
+async function lupaRunCredito(doc) {
+  const d = await api('/integracao/apibrasil?acao=cnpj', { method: 'POST', body: JSON.stringify({ cnpj: doc }) });
+  return lupaCreditoHtml(d);
+}
+
+async function lupaRunCep(doc) {
+  const d = await api(`/integracao/cep?cep=${doc}`);
+  const c = d.cep || {};
+  return `
+    <h4>${ddEsc(c.street || '—')}${c.number ? ', ' + ddEsc(c.number) : ''}</h4>
+    <div class="kv"><span>Bairro</span><b>${ddEsc(c.neighborhood || '—')}</b></div>
+    <div class="kv"><span>Cidade</span><b>${ddEsc(c.city || '—')}</b></div>
+    <div class="kv"><span>UF</span><b>${ddEsc(c.state || '—')}</b></div>`;
+}
+
+async function lupaRunNfe(doc) {
+  const d = await api(`/integracao/serpro?acao=nfe&chave=${doc}`);
+  return serproRenderNfe(d.resumo, lupaFonteGen(d, 'Documento fiscal · base oficial'));
+}
+
+function lupaSecoes(tipo, doc) {
+  if (tipo === 'cnpj') return [
+    { id: 'cad', ico: '🏢', t: 'Cadastro Empresarial', sub: 'Receita Federal · dados oficiais completos', run: () => lupaRunCnpjOficial(doc) },
+    { id: 'divida', ico: '⚖️', t: 'Dívida Ativa da União', sub: 'inscrições, valores e situação', run: () => lupaRunDivida(doc) },
+    { id: 'risco', ico: '🛡️', t: 'Verificação de Risco', sub: 'score e consistência cadastral', run: () => lupaRunRisco(doc, 'pj', () => lupaIndiceCnpj(doc)) },
+    { id: 'big', ico: '🗂️', t: 'Big Data Cadastral', sub: 'base ampliada de pessoa jurídica · consulta sob demanda', custo: 0.16, auto: false, run: lupaRunDD('CadastroPessoaJuridica', 'Cnpj', doc) },
+    { id: 'credito', ico: '💳', t: 'Análise Creditícia', sub: 'cadastral + sócios por crédito · consulta sob demanda', custo: 0.04, auto: false, run: () => lupaRunCredito(doc) },
+  ];
+  if (tipo === 'cpf') return [
+    { id: 'basico', ico: '👤', t: 'Validação do Documento', sub: 'estrutura e dígitos verificadores', run: () => lupaRunCpfBasico(doc) },
+    { id: 'oficial', ico: '🪪', t: 'Cadastro na Receita Federal', sub: 'consulta oficial — exige data de nascimento', auto: false,
+      gatilho: `<div class="search-row"><input class="field" id="lupaNasc" inputmode="numeric" placeholder="Nascimento (ddmmaaaa)"><button class="btn btn-gradient" onclick="UI.lupaExecutar('oficial')">Consultar</button></div>`,
+      run: () => lupaRunCpfOficial(doc) },
+    { id: 'divida', ico: '⚖️', t: 'Dívida Ativa da União', sub: 'inscrições, valores e situação', run: () => lupaRunDivida(doc) },
+    { id: 'risco', ico: '🛡️', t: 'Verificação de Risco', sub: 'score e consistência cadastral', run: () => lupaRunRisco(doc, 'pf', () => lupaIndiceCpf(doc)) },
+    { id: 'big', ico: '🗂️', t: 'Big Data Cadastral', sub: 'base ampliada de pessoa física · consulta sob demanda', custo: 0.16, auto: false, run: lupaRunDD('CadastroPessoaFisica', 'Cpf', doc) },
+  ];
+  if (tipo === 'cep') return [
+    { id: 'ender', ico: '📍', t: 'Endereço Completo', sub: 'logradouro, bairro, cidade e UF', run: () => lupaRunCep(doc) },
+  ];
+  if (tipo === 'nfe') return [
+    { id: 'doc', ico: '🧾', t: 'Documento Fiscal', sub: 'NF-e localizada nas bases oficiais', run: () => lupaRunNfe(doc) },
+  ];
+  return [];
+}
+
+function lupaErro(e, id) {
+  const msg = lupaNeutro(e.message) || 'Esta frente não retornou dados agora.';
+  const code = e.code || e.data?.code || '';
+  const checkout = e.data?.checkout_url || e.data?.error?.checkout_url;
+  const orderNsu = e.data?.order_nsu || e.data?.error?.order_nsu;
+  let h = `<p class="form-error">${ddEsc(msg)}</p>`;
+  if (checkout && orderNsu && id) {
+    h += `<button class="btn btn-gradient small mt-3" data-url="${ddEsc(checkout)}" onclick="UI.lupaAbrirPix(this)">Pagar PIX para liberar</button>
+      <p class="muted small mt-2">Aguardando a confirmação do pagamento — o resultado aparece aqui sozinho.</p>`;
+    lupaAguardarPagamento(orderNsu, id);
+  } else if (checkout) {
+    h += `<button class="btn btn-gradient small mt-3" data-url="${ddEsc(checkout)}" onclick="UI.lupaAbrirPix(this)">Pagar PIX para liberar</button>`;
+  } else if (code === 'SALDO_INSUFICIENTE') {
+    h += `<p class="muted small mt-2">O saldo da conta de consultas está esgotado — a recarga libera esta frente imediatamente.</p>`;
+  }
+  h += `<p class="muted small mt-2">As demais frentes continuam funcionando — tente novamente.</p>`;
+  return h;
+}
+
+function lupaAbrirPix(btn) {
+  const url = btn?.dataset?.url || '';
+  if (/^https:\/\//.test(url)) window.open(url, '_blank', 'noopener');
+}
+
+const LUPA_POLL = {};
+
+function lupaAguardarPagamento(orderNsu, id) {
+  if (LUPA_POLL[id]) clearInterval(LUPA_POLL[id]);
+  const t0 = Date.now();
+  LUPA_POLL[id] = setInterval(async () => {
+    const el = $('lupa-b-' + id);
+    if (!el || Date.now() - t0 > 20 * 60 * 1000) { clearInterval(LUPA_POLL[id]); LUPA_POLL[id] = null; return; }
+    let r, pendente = false;
+    try {
+      r = await api('/integracao/apibrasil?acao=pagar-consulta', { method: 'POST', body: JSON.stringify({ order_nsu: orderNsu }) });
+      pendente = r.status === 'pendente';
+    } catch (err) {
+      const code = err.code || err.data?.code || '';
+      if (code === 'PAGAMENTO_PENDENTE') pendente = true;
+      else { clearInterval(LUPA_POLL[id]); LUPA_POLL[id] = null; el.innerHTML = lupaErro(err); return; }
+    }
+    if (pendente) return;
+    clearInterval(LUPA_POLL[id]); LUPA_POLL[id] = null;
+    el.innerHTML = `${lupaCreditoHtml(r)}<p class="muted small mt-2">Pagamento confirmado — consulta concluída.</p>`;
+  }, 10000);
+}
+
+function lupaCorpoInicial(s) {
+  if (s.gatilho) return s.gatilho;
+  if (s.auto === false) {
+    return `<p class="muted small">Consulta sob demanda — debitada do saldo da sua conta de consultas.</p>
+      <button class="btn btn-gradient small mt-3" onclick="UI.lupaExecutar('${s.id}')">Consultar agora</button>`;
+  }
+  return '<div class="lupa-skeleton"><i></i><i></i><i></i></div>';
+}
+
+async function buscaUnica() {
+  const { tipo, doc } = lupaDetectarTipo($('lupaInput').value);
+  if (tipo === 'vazio' || tipo === 'indefinido') return alert('Digite um CEP (8), CPF (11), CNPJ (14) ou chave de NF-e (44) dígitos.');
+  LUPA.tipo = tipo; LUPA.doc = doc; LUPA.memo = {};
+  const secs = lupaSecoes(tipo, doc);
+  LUPA.secoes = secs;
+  const box = $('lupaResults');
+  box.innerHTML = `
+    <div class="lupa-header-res"><span>Retrato completo de <b>${ddEsc(lupaMascara(tipo, doc))}</b></span><span class="tag tag-autorizada">${secs.length} frentes</span></div>
+    ${secs.map((s) => `
+      <div class="lupa-secao panel glass" id="lupa-s-${s.id}">
+        <div class="lupa-secao-head">
+          <span class="lupa-secao-ico">${s.ico}</span>
+          <div class="lupa-secao-tit"><h4>${s.t}</h4><p class="muted small">${s.sub}</p></div>
+          ${s.custo ? `<span class="lupa-custo">R$ ${s.custo.toFixed(2)}</span>` : ''}
+        </div>
+        <div class="lupa-secao-body" id="lupa-b-${s.id}">${lupaCorpoInicial(s)}</div>
+      </div>`).join('')}`;
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await Promise.allSettled(secs.filter((s) => s.auto !== false).map(async (s) => {
+    try { $('lupa-b-' + s.id).innerHTML = await s.run(); }
+    catch (e) { $('lupa-b-' + s.id).innerHTML = lupaErro(e, s.id); }
+  }));
+}
+
+async function lupaExecutar(id) {
+  const s = LUPA.secoes.find((x) => x.id === id);
+  if (!s) return;
+  $('lupa-b-' + id).innerHTML = '<div class="lupa-skeleton"><i></i><i></i><i></i></div>';
+  try { $('lupa-b-' + id).innerHTML = await s.run(); }
+  catch (e) { $('lupa-b-' + id).innerHTML = lupaErro(e, id); }
+}
+
 // ---------- Boot ----------
 const UI = {
   calcFiscal, liberarNome, validarNome, adicionarProduto, renderItens, emitirNota,
@@ -2012,6 +2354,7 @@ const UI = {
   consultarSerasa, consultarApibrasil, apibrasilSaldo,
   consultarDirectdata, ddEndpointChange,
   consultarSerpro, serproServicoChange, baixarCndPdf,
+  buscaUnica, lupaDetectarChange, lupaExecutar, lupaAbrirPix,
   carregarSaldoZapsign, toggleCertForm, criarCertificado, carregarProtocolos,
   enviarChat, analisarNotaIA, alterarUser, removerUser,
   carregarAssinatura, assinar, salvarWhatsapp, imprimirRecibo,
