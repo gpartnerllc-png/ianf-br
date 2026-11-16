@@ -1222,7 +1222,7 @@ export async function handleApibrasil(env, request) {
       if (r.code === 'SALDO_INSUFICIENTE' && infinitepayEnabled(env)) {
         const cobranca = await criarCobrancaConsulta(env, request, auth.user, {
           tipo: 'apibrasil', consulta: tipo, parametros: { cnpj, tipo },
-          valorConsulta: r.valorConsulta || 0.04, descricao: 'Consulta IANF · APIBrasil',
+          valorConsulta: r.valorConsulta || 0.04, descricao: 'Consulta IANF · retrato completo',
         });
         if (cobranca) {
           return json({
@@ -1299,7 +1299,8 @@ export async function handleApibrasil(env, request) {
 
 // Cria a cobrança PIX da consulta (valor + margem de 10%, mínimo R$ 0,05) e registra o pagamento pendente
 async function criarCobrancaConsulta(env, request, user, { tipo, consulta, parametros, valorConsulta, descricao }) {
-  const valorCents = Math.max(5, Math.ceil(Number(valorConsulta || 0.04) * 110));
+  // A adquirente recusa links abaixo de R$ 1,00 ("Total price must be greater than 1"): piso de 100 cents.
+  const valorCents = Math.max(100, Math.ceil(Number(valorConsulta || 0.04) * 110));
   const orderNsu = `IANF-Q-${user.id}-${Date.now()}`;
   let host = new URL(request.url).origin;
   if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(host)) host = env.IANF_URL || '';

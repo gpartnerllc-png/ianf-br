@@ -329,6 +329,25 @@
 
         <!-- ============ CONSULTAS ============ -->
         <section class="view hidden" id="view-consultas">
+            <div class="lupa-hero glass">
+                <div class="lupa-ico" aria-hidden="true">🔍</div>
+                <h3 class="lupa-titulo">UMA BUSCA. <span>TUDO</span> ENCONTRADO.</h3>
+                <p class="lupa-sub">Digite o número — o sistema varre todas as bases oficiais de uma vez e devolve o retrato completo.</p>
+                <div class="lupa-busca">
+                    <input class="lupa-input" id="lupaInput" inputmode="numeric" autocomplete="off" placeholder="CEP · CPF · CNPJ · chave de NF-e" oninput="UI.lupaDetectarChange()" onkeydown="if(event.key==='Enter')UI.buscaUnica()">
+                    <button class="lupa-btn" onclick="UI.buscaUnica()">BUSCAR</button>
+                </div>
+                <div class="lupa-chips" id="lupaChips">
+                    <span class="lupa-chip" data-t="cep">📍 CEP</span>
+                    <span class="lupa-chip" data-t="cpf">👤 CPF</span>
+                    <span class="lupa-chip" data-t="cnpj">🏢 CNPJ</span>
+                    <span class="lupa-chip" data-t="nfe">🧾 Chave NF-e</span>
+                </div>
+                <p class="lupa-detect small" id="lupaDetect">Detectamos automaticamente o que você digitou.</p>
+            </div>
+            <div id="lupaResults" class="lupa-results"></div>
+            <details class="lupa-avancado">
+                <summary>⚙️ Modo avançado · serviços específicos por base</summary>
             <div class="consulta-grid">
                 <div class="panel glass">
                     <h3 class="panel-title">🔍 CNPJ <span class="panel-sub">Receita Federal / Redesim</span></h3>
@@ -465,6 +484,7 @@
                     <div id="serpro-result" class="result-card mt-3"></div>
                 </div>
             </div>
+            </details>
         </section>
 
         <!-- ============ CERTIFICADOS ============ -->
