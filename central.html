@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="IANF — Central do Sistema: o que é, valores, regras, políticas, termos de uso, LGPD e direitos da xPartner.">
+<title>IANF | Central do Sistema — Termos, LGPD, Valores e Direitos</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%8C%90%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<style>
+:root{
+  --bg:#fff3e2; --ink:#0b0b0f; --paper:#ffffff;
+  --laranja:#ea580c; --laranja-vivo:#ff6b00; --roxo:#7c3aed; --azul:#2563eb;
+  --sombra:6px 6px 0 var(--ink);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;overflow-x:hidden}
+#neural{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.vinheta{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at 50% 30%,transparent 40%,rgba(255,243,226,.75) 100%)}
+.camada{position:relative;z-index:2}
+
+/* ---------- topbar ---------- */
+.topo{position:sticky;top:0;z-index:50;background:var(--ink);color:#fff;display:flex;align-items:center;gap:18px;padding:12px 22px;border-bottom:4px solid var(--laranja)}
+.topo .marca{font-weight:900;font-size:22px;letter-spacing:-1px;background:linear-gradient(90deg,var(--laranja-vivo),var(--roxo));-webkit-background-clip:text;background-clip:text;color:transparent}
+.topo nav{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
+.topo nav a{color:#ffd9b0;text-decoration:none;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:8px 12px;border-radius:8px}
+.topo nav a:hover{background:var(--laranja);color:#fff}
+.topo .entrar{background:linear-gradient(90deg,var(--laranja),var(--roxo));color:#fff;font-weight:900;padding:9px 18px;border-radius:10px;text-decoration:none;font-size:13px;text-transform:uppercase;letter-spacing:.06em;box-shadow:0 0 18px rgba(234,88,12,.55)}
+
+/* ---------- hero ---------- */
+.hero{min-height:88vh;display:flex;flex-direction:column;justify-content:center;padding:60px 6vw;position:relative}
+.hero .selo{display:inline-block;background:var(--ink);color:#ffd9b0;font-weight:900;font-size:12px;letter-spacing:.3em;text-transform:uppercase;padding:8px 16px;border-radius:999px;margin-bottom:26px;box-shadow:0 0 24px rgba(124,58,237,.4)}
+.hero h1{font-size:clamp(44px,8.5vw,120px);font-weight:900;line-height:.92;letter-spacing:-.035em;text-transform:uppercase;max-width:14ch}
+.hero h1 .fogo{background:linear-gradient(92deg,var(--laranja-vivo) 0%,var(--laranja) 35%,var(--roxo) 75%,var(--azul) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 26px rgba(234,88,12,.35))}
+.hero h2{margin-top:22px;font-size:clamp(16px,2.2vw,24px);font-weight:800;max-width:52ch;color:#3a2a1c}
+.hero .stats{display:flex;gap:14px;flex-wrap:wrap;margin-top:44px}
+.stat{background:var(--paper);border:3px solid var(--ink);box-shadow:var(--sombra);padding:16px 22px;border-radius:14px;min-width:150px}
+.stat b{display:block;font-size:34px;font-weight:900;letter-spacing:-.03em;background:linear-gradient(90deg,var(--laranja),var(--roxo));-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat span{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:#6b5b4d}
+.hero .cta{margin-top:44px;display:flex;gap:16px;flex-wrap:wrap}
+.btn{display:inline-block;font-weight:900;text-transform:uppercase;letter-spacing:.05em;font-size:15px;padding:16px 30px;border-radius:14px;text-decoration:none;border:3px solid var(--ink);transition:transform .15s ease,box-shadow .15s ease}
+.btn:hover{transform:translate(-3px,-3px)}
+.btn-grad{background:linear-gradient(92deg,var(--laranja-vivo),var(--roxo));color:#fff;box-shadow:8px 8px 0 var(--ink),0 0 30px rgba(234,88,12,.4)}
+.btn-grad:hover{box-shadow:11px 11px 0 var(--ink),0 0 44px rgba(124,58,237,.55)}
+.btn-ink{background:var(--ink);color:#fff;box-shadow:8px 8px 0 var(--laranja)}
+
+/* ---------- marquee ---------- */
+.marquee{background:var(--ink);color:#ffb066;border-block:4px solid var(--laranja);overflow:hidden;white-space:nowrap;padding:14px 0}
+.marquee div{display:inline-block;animation:desliza 26s linear infinite;font-weight:900;font-size:15px;letter-spacing:.18em;text-transform:uppercase}
+.marquee b{color:#fff;margin:0 28px}
+@keyframes desliza{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ---------- seções ---------- */
+section.bloco{padding:90px 6vw;position:relative}
+section.bloco:nth-of-type(even){background:rgba(255,255,255,.55)}
+.rotulo{display:inline-block;font-weight:900;font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:#fff;background:var(--roxo);padding:7px 16px;border-radius:6px;transform:skewX(-8deg);margin-bottom:18px}
+.rotulo.laranja{background:var(--laranja)}
+.rotulo.azul{background:var(--azul)}
+.rotulo.preto{background:var(--ink)}
+h3.titulo{font-size:clamp(30px,5vw,58px);font-weight:900;letter-spacing:-.03em;text-transform:uppercase;line-height:1;margin-bottom:14px}
+h3.titulo em{font-style:normal;color:var(--laranja)}
+p.lede{font-size:17px;font-weight:600;color:#4a3b2e;max-width:70ch;margin-bottom:38px}
+
+.grelha{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:20px}
+.card{background:var(--paper);border:3px solid var(--ink);border-radius:18px;box-shadow:var(--sombra);padding:26px;transition:transform .18s ease,box-shadow .18s ease}
+.card:hover{transform:translate(-4px,-4px);box-shadow:10px 10px 0 var(--laranja)}
+.card .ico{font-size:34px;margin-bottom:12px;display:block}
+.card h4{font-size:19px;font-weight:900;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:10px}
+.card p{font-size:14px;line-height:1.6;color:#4a3b2e;font-weight:500}
+.card.escuro{background:var(--ink);color:#fff;border-color:var(--ink)}
+.card.escuro:hover{box-shadow:10px 10px 0 var(--roxo)}
+.card.escuro p{color:#d8c8b8}
+
+/* ---------- valores ---------- */
+.tabela-valores{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px}
+.preco{background:var(--paper);border:3px solid var(--ink);border-radius:20px;box-shadow:var(--sombra);overflow:hidden}
+.preco .faixa{background:var(--ink);color:#fff;padding:18px 22px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;font-size:15px}
+.preco.destaque .faixa{background:linear-gradient(92deg,var(--laranja-vivo),var(--roxo));font-size:17px}
+.preco .corpo{padding:22px}
+.preco .valor{font-size:44px;font-weight:900;letter-spacing:-.04em}
+.preco .valor small{font-size:15px;font-weight:800;color:#6b5b4d;letter-spacing:0}
+.preco ul{list-style:none;margin-top:16px}
+.preco li{font-size:13.5px;font-weight:600;color:#4a3b2e;padding:7px 0 7px 22px;position:relative;border-top:1px dashed #e2d3c2}
+.preco li::before{content:'▸';position:absolute;left:0;color:var(--laranja);font-weight:900}
+.nota{margin-top:22px;font-size:13px;font-weight:600;color:#6b5b4d;background:#ffe8cc;border:2px solid var(--laranja);border-radius:12px;padding:14px 18px}
+
+/* ---------- listas de regras/termos ---------- */
+.lista-densa{counter-reset:item;max-width:90ch}
+.lista-densa .item{display:flex;gap:18px;padding:18px 0;border-bottom:2px solid rgba(11,11,15,.12)}
+.lista-densa .item::before{counter-increment:item;content:counter(item,decimal-leading-zero);font-weight:900;font-size:22px;color:var(--laranja);min-width:44px;letter-spacing:-.04em}
+.lista-densa .item h5{font-size:15.5px;font-weight:900;text-transform:uppercase;margin-bottom:5px}
+.lista-densa .item p{font-size:14px;line-height:1.6;color:#4a3b2e;font-weight:500}
+
+/* ---------- LGPD ---------- */
+.lgpd-moldura{background:var(--ink);color:#fff;border-radius:24px;padding:44px;box-shadow:12px 12px 0 var(--laranja);position:relative;overflow:hidden}
+.lgpd-moldura::after{content:'LGPD';position:absolute;right:-10px;bottom:-40px;font-size:170px;font-weight:900;color:rgba(124,58,237,.22);letter-spacing:-.05em;pointer-events:none}
+.lgpd-moldura h3{color:#fff}
+.lgpd-moldura p.lede{color:#d8c8b8}
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}
+.chip{border:2px solid var(--roxo);color:#e9d5ff;border-radius:999px;padding:8px 16px;font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.lgpd-moldura .grelha .card{background:#16161d;border-color:#3a2f56;color:#fff}
+.lgpd-moldura .grelha .card:hover{box-shadow:10px 10px 0 var(--roxo)}
+.lgpd-moldura .grelha .card p{color:#c9b8a8}
+.lgpd-moldura .grelha .card h4{color:#ffd9b0}
+.dpo{margin-top:26px;display:inline-block;background:linear-gradient(92deg,var(--laranja),var(--roxo));color:#fff;font-weight:900;padding:14px 26px;border-radius:12px;text-decoration:none;box-shadow:0 0 26px rgba(234,88,12,.45)}
+
+/* ---------- direitos ---------- */
+.selo-xp{display:flex;align-items:center;gap:20px;background:var(--paper);border:3px solid var(--ink);border-radius:20px;box-shadow:var(--sombra);padding:26px;margin-bottom:30px}
+.selo-xp .brasao{width:74px;height:74px;border-radius:16px;background:linear-gradient(135deg,var(--laranja-vivo),var(--roxo));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:26px;box-shadow:0 0 24px rgba(124,58,237,.5)}
+.selo-xp b{font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:-.01em;display:block}
+.selo-xp span{font-size:13.5px;font-weight:600;color:#6b5b4d}
+
+/* ---------- rodapé ---------- */
+footer.rodape{background:var(--ink);color:#c9b8a8;padding:60px 6vw 40px;text-align:center}
+footer.rodape .marca{font-size:30px;font-weight:900;background:linear-gradient(90deg,var(--laranja-vivo),var(--roxo));-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-.03em}
+footer.rodape p{font-size:13px;margin-top:14px;line-height:1.7}
+footer.rodape a{color:#ffb066;font-weight:800;text-decoration:none}
+
+@media (max-width:720px){
+  .topo nav{display:none}
+  .lgpd-moldura{padding:26px}
+}
+</style>
+</head>
+<body>
+
+<canvas id="neural" aria-hidden="true"></canvas>
+<div class="vinheta" aria-hidden="true"></div>
+
+<div class="camada">
+
+<header class="topo">
+  <span class="marca">IANF</span>
+  <nav aria-label="Seções da central">
+    <a href="#oque">O que é</a>
+    <a href="#poder">Poderes</a>
+    <a href="#valores">Valores</a>
+    <a href="#regras">Regras</a>
+    <a href="#termos">Termos</a>
+    <a href="#lgpd">LGPD</a>
+    <a href="#direitos">Direitos</a>
+  </nav>
+  <a class="entrar" href="/">ENTRAR →</a>
+</header>
+
+<!-- ================= HERO ================= -->
+<div class="hero" id="topo">
+  <span class="selo">Central do Sistema · Comunicação Oficial</span>
+  <h1>O <span class="fogo">radar fiscal</span> que não pisca.</h1>
+  <h2>IANF é o sistema de balanços, nota fiscal e inteligência artificial da <b>Vitrine xPartner</b>: Reforma Tributária CBS/IBS, emissão NF-e/NFC-e/NFS-e, 25 serviços oficiais do Serpro, certificado digital, PIX e IA — numa única central.</h2>
+  <div class="stats">
+    <div class="stat"><b>25</b><span>APIs Serpro oficiais</span></div>
+    <div class="stat"><b>3</b><span>modelos de NF-e</span></div>
+    <div class="stat"><b>24/7</b><span>balanço em tempo real</span></div>
+    <div class="stat"><b>100%</b><span>dados na nuvem segura</span></div>
+  </div>
+  <div class="cta">
+    <a class="btn btn-grad" href="/">Entrar no Sistema</a>
+    <a class="btn btn-ink" href="#lgpd">Ver LGPD &amp; Termos</a>
+  </div>
+</div>
+
+<!-- ================= MARQUEE ================= -->
+<div class="marquee" aria-hidden="true"><div>
+  <b>REFORMA TRIBUTÁRIA CBS/IBS</b>•<b>NF-e NFC-e NFS-e</b>•<b>SERPRO 25 SERVIÇOS</b>•<b>E-CPF / E-CNPJ</b>•<b>PIX INFINITEPAY</b>•<b>IA FISCAL</b>•<b>BALANCETE DRE</b>•<b>IMPRESSÃO A4 · TÉRMICA · ZPL</b>•<b>LGPD</b>•<b>DIREITOS xPARTNER</b>•
+  <b>REFORMA TRIBUTÁRIA CBS/IBS</b>•<b>NF-e NFC-e NFS-e</b>•<b>SERPRO 25 SERVIÇOS</b>•<b>E-CPF / E-CNPJ</b>•<b>PIX INFINITEPAY</b>•<b>IA FISCAL</b>•<b>BALANCETE DRE</b>•<b>IMPRESSÃO A4 · TÉRMICA · ZPL</b>•<b>LGPD</b>•<b>DIREITOS xPARTNER</b>•
+</div></div>
+
+<!-- ================= O QUE É ================= -->
+<section class="bloco" id="oque">
+  <span class="rotulo laranja">O que é o sistema</span>
+  <h3 class="titulo">Uma central. <em>Todo</em> o jogo fiscal.</h3>
+  <p class="lede">O IANF (Inteligência Artificial de Nota Fiscal) é um software de gestão fiscal e contábil hospedado em nuvem Cloudflare. Ele não é um "emissor avulso": ele enxerga a venda, o caixa, o documento fiscal e o governo na mesma tela — e fala direto com as bases oficiais.</p>
+  <div class="grelha">
+    <div class="card"><span class="ico">🧾</span><h4>Emissão Fiscal Completa</h4><p>NF-e, NFC-e e NFS-e com Reforma Tributária CBS/IBS 2026, leiaute oficial, XML, DANFE e distribuição automática para o fisco via serviços autorizados.</p></div>
+    <div class="card"><span class="ico">🏛️</span><h4>Serpro · Bases Oficiais</h4><p>25 APIs do Serviço Federal de Processamento de Dados: CNPJ, CPF, NF-e, CND, Dívida Ativa, CCIR, Faturamento/Compartilha, Antecipa Gov, Datavalid e mais — produção com seus contratos e demonstração automática quando não contratado.</p></div>
+    <div class="card"><span class="ico">📊</span><h4>Balanços &amp; DRE Inteligente</h4><p>Balancete com gráficos, comparativo hoje/30d/ano, fluxo de caixa e relatório imprimível. Cada venda entra no DRE em tempo real — inclusive as vendas sincronizadas do seu PDV.</p></div>
+    <div class="card"><span class="ico">🧠</span><h4>IA Fiscal</h4><p>Inteligência artificial que analisa documentos, explica tributos e responde perguntas sobre a sua operação, direto no painel.</p></div>
+    <div class="card"><span class="ico">🔐</span><h4>Certificado Digital</h4><p>E-CPF e E-CNPJ emitidos via ZapSign com assinatura eletrônica com validade jurídica, sem instalar nada no computador.</p></div>
+    <div class="card"><span class="ico">💳</span><h4>Pagamentos &amp; Impressão</h4><p>Checkout PIX/cartão InfinitePay e módulo de impressão A4, térmica 80mm, etiquetas ZPL e integração com maquininha.</p></div>
+  </div>
+</section>
+
+<!-- ================= PODERES ================= -->
+<section class="bloco" id="poder">
+  <span class="rotulo">Como funciona por dentro</span>
+  <h3 class="titulo">Do clique ao <em>fisco</em>, em 4 saltos.</h3>
+  <div class="grelha">
+    <div class="card escuro"><span class="ico">1️⃣</span><h4>Coleta</h4><p>Venda, nota e consulta entram por um único painel. Nada de planilha paralela: cada evento vira lançamento contábil na hora.</p></div>
+    <div class="card escuro"><span class="ico">2️⃣</span><h4>Validação</h4><p>CPF/CNPJ com dígito verificador, chaves NF-e de 44 dígitos, parâmetros de API conferidos antes de sair — erro de digitação não passa.</p></div>
+    <div class="card escuro"><span class="ico">3️⃣</span><h4>Base Oficial</h4><p>Requisição vai primeiro à produção Serpro com suas credenciais; se o produto não estiver contratado, cai automaticamente na demonstração oficial — com selo de origem em cada resposta.</p></div>
+    <div class="card escuro"><span class="ico">4️⃣</span><h4>Prova</h4><p>Resultado curado campo a campo + JSON bruto da fonte + trilha de auditoria (quem, quando, de qual IP). O que você vê é exatamente o que o governo devolveu.</p></div>
+  </div>
+</section>
+
+<!-- ================= VALORES ================= -->
+<section class="bloco" id="valores">
+  <span class="rotulo azul">Valores &amp; cobrança</span>
+  <h3 class="titulo">Preço na mesa. <em>Sem</em> letra escondida.</h3>
+  <div class="tabela-valores">
+    <div class="preco destaque">
+      <div class="faixa">Franquia IANF · Mensal</div>
+      <div class="corpo">
+        <div class="valor">R$ 289,80<small> /mês</small></div>
+        <ul>
+          <li>Emissão NF-e/NFC-e/NFS-e ilimitada</li>
+          <li>Balanços, DRE e IA Fiscal inclusos</li>
+          <li>Certificados, impressão e integrações</li>
+          <li>Renovação automática a cada 30 dias</li>
+          <li>Pagamento PIX ou cartão (InfinitePay)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="preco">
+      <div class="faixa">Consultas pagas por uso</div>
+      <div class="corpo">
+        <div class="valor">Custo + 10%<small> margem da central</small></div>
+        <ul>
+          <li>DirectData (catálogo oficial de consultas)</li>
+          <li>APIBrasil · consulta CNPJ a partir de R$ 0,04</li>
+          <li>Sem saldo? O sistema gera um PIX avulso e libera a consulta sozinho após o pagamento confirmado</li>
+          <li>Confirmação 100% via webhook + verificação na operadora — nunca por palpite</li>
+        </ul>
+      </div>
+    </div>
+    <div class="preco">
+      <div class="faixa">Produtos Serpro</div>
+      <div class="corpo">
+        <div class="valor">Loja Serpro<small> contrato direto seu</small></div>
+        <ul>
+          <li>Cada API oficial é contratada por você em loja.serpro.gov.br</li>
+          <li>O IANF conecta suas chaves e usa a sua assinatura</li>
+          <li>Sem contrato? O painel serve a demonstração oficial com selo "demonstração"</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="nota"><b>Aviso de cobrança:</b> a franquia é recorrente e pode ser cancelada a qualquer momento pelo administrador, sem multa proporcional ao mês corrente. Consultas pagas são debitadas no ato — resultado não reembolsável quando a base oficial responder com sucesso, mesmo que "nenhum registro encontrado".</div>
+</section>
+
+<!-- ================= REGRAS ================= -->
+<section class="bloco" id="regras">
+  <span class="rotulo laranja">Regras de uso</span>
+  <h3 class="titulo">Oito regras. <em>Zero</em> exceção.</h3>
+  <div class="lista-densa">
+    <div class="item"><div><h5>Conta é pessoal e intransferível</h5><p>Login, senha e sessão são nominais. Compartilhar conta com terceiros cancela o acesso sem reembolso.</p></div></div>
+    <div class="item"><div><h5>Cadastro passa por aprovação</h5><p>Contas novas (exceto a de administrador) aguardam aprovação manual antes de operar.</p></div></div>
+    <div class="item"><div><h5>Sem franquia ativa, sistema pausado</h5><p>Vencida a cobrança e não paga, o IANF avisa com antecedência (5 dias e no dia do vencimento) e pausa a operação até regularizar — exceto o painel de assinatura e o login.</p></div></div>
+    <div class="item"><div><h5>Limites técnicos de consulta</h5><p>Para proteger as bases oficiais: Serpro 30/min, DirectData 30/min, APIBrasil 20/min, Serasa 10/min, login 1/min por IP. Estourou o limite? Aguarde 1 minuto.</p></div></div>
+    <div class="item"><div><h5>Documento tem que ser real</h5><p>Usar o sistema para consultar dados de terceiros sem base legal (LGPD) é proibido e rastreável: toda consulta fica registrada em auditoria com usuário, IP e data.</p></div></div>
+    <div class="item"><div><h5>Credenciais de terceiros são suas</h5><p>Chaves Serpro, InfinitePay, ZapSign e similares pertencem ao operador. O IANF só as guarda em cofre de segredos da nuvem — nunca em código, nunca em texto.</p></div></div>
+    <div class="item"><div><h5>Nada de engenharia reversa</h5><p>É vedado copiar, espelhar, revender, sublicenciar ou tentar extrair lógica/segredos do sistema sob qualquer pretexto.</p></div></div>
+    <div class="item"><div><h5>Uso conforme a lei</h5><p>Emissão fiscal, certidões e consultas devem seguir a legislação brasileira vigente. O IANF é ferramenta; a responsabilidade tributária é do emitente.</p></div></div>
+  </div>
+</section>
+
+<!-- ================= TERMOS ================= -->
+<section class="bloco" id="termos">
+  <span class="rotulo preto">Políticas &amp; termos de uso</span>
+  <h3 class="titulo">O contrato, <em>sem rodeio</em>.</h3>
+  <div class="lista-densa">
+    <div class="item"><div><h5>Licença de uso</h5><p>Concedemos licença não exclusiva, não transferível e revogável de uso do IANF durante a franquia ativa. Não há venda de software: há serviço de acesso.</p></div></div>
+    <div class="item"><div><h5>Disponibilidade &amp; manutenção</h5><p>Alvo de disponibilidade alto, mas janelas de manutenção, instabilidades da nuvem Cloudflare ou das APIs governamentais podem interromper o serviço. Interrupções de terceiros não geram reembolso automático; a franquia continua contando.</p></div></div>
+    <div class="item"><div><h5>Natureza da informação</h5><p>Consultas (CNPJ, CPF, NF-e, CND, dívida, CCIR etc.) são espelhos fiéis da base oficial no instante da requisição — com selo de origem "oficial" ou "demonstração". Respostas de demonstração são fictícias e NÃO têm valor probatório. Certidão só vale se emitida pelo órgão emissor.</p></div></div>
+    <div class="item"><div><h5>Limitação de responsabilidade</h5><p>O IANF não presta consultoria contábil ou jurídica. Erros de lançamento por digitação do operador, interpretações tributárias e autuações são de responsabilidade do contribuinte e do seu contador.</p></div></div>
+    <div class="item"><div><h5>Terceiros</h5><p>Serpro, Receita, PGFN/ENCAC, ZapSign, Spedy, InfinitePay, APIBrasil, DirectData, Serasa e Cloudflare têm termos próprios. Ao usar as integrações, você também aceita os termos deles.</p></div></div>
+    <div class="item"><div><h5>Rescisão</h5><p>Descumprimento destas regras, fraude, uso contra terceiros ou lavagem de dados gera bloqueio imediato e comunicação às autoridades, sem prejuízo de cobrança do período.</p></div></div>
+    <div class="item"><div><h5>Alterações</h5><p>Estes termos podem evoluir. Mudanças relevantes são anunciadas dentro do painel com data de vigência; continuar usando após a vigência significa aceitar.</p></div></div>
+  </div>
+</section>
+
+<!-- ================= LGPD ================= -->
+<section class="bloco" id="lgpd">
+  <div class="lgpd-moldura">
+    <span class="rotulo azul">Lei nº 13.709/2018</span>
+    <h3 class="titulo">Sua vida privada <em>não é</em> produto.</h3>
+    <p class="lede">O IANF trata dados pessoais e fiscais com a seriedade de quem guarda o cofre da própria empresa. Esta é a nossa política de privacidade em uma página.</p>
+    <div class="chips">
+      <span class="chip">Coleta mínima</span><span class="chip">Base legal declarada</span><span class="chip">Sem venda de dados</span><span class="chip">Sem trackers</span><span class="chip">Criptografia em trânsito</span><span class="chip">Direitos do titular garantidos</span>
+    </div>
+    <div class="grelha">
+      <div class="card"><h4>📥 O que coletamos</h4><p>E-mail, nome, CPF/CNPJ de cadastro, documentos que você consulta/emite, endereço e telefone que você digita, IP e carimbos de tempo de acesso, e o conteúdo das notas e lançamentos que você cria.</p></div>
+      <div class="card"><h4>🎯 Para que usamos</h4><p>Executar o contrato (emissão, consulta, balanço), cumprir obrigação legal/fiscal, autenticar, prevenir fraude e responder solicitações de titulares. Nada de publicidade comportamental. Nada de perfilamento.</p></div>
+      <div class="card"><h4>⚖️ Base legal</h4><p>Execução de contrato (art. 7º, V), obrigação legal/fiscal (art. 7º, II), legítimo interesse para segurança da conta (art. 7º, IX) e consentimento quando aplicável.</p></div>
+      <div class="card"><h4>🤝 Com quem compartilhamos</h4><p>Somente os órgãos/operadores necessários ao resultado: Serpro/Receita/PGFN (consultas oficiais), ZapSign (certificados), Spedy (autorizadoras), InfinitePay (pagamento), Cloudflare (infraestrutura). Nunca por venda ou publicidade.</p></div>
+      <div class="card"><h4>🔒 Como protegemos</h4><p>Senha em hash PBKDF2 (nunca em claro), sessões JWT com expiração, segredos de API em cofre gerenciado (não em código), trilha de auditoria por usuário/IP, rate limiting e TLS fim a fim.</p></div>
+      <div class="card"><h4>🗓️ Por quanto tempo</h4><p>Dados fiscais pelo prazo legal (5–10 anos conforme o documento); logs de segurança ~12 meses; dados de conta encerrada são apagados ou anonimizados, salvo retenção legal obrigatória.</p></div>
+    </div>
+    <h4 style="margin-top:34px;font-size:17px;font-weight:900;text-transform:uppercase;color:#ffd9b0">Direitos do titular — exija, é seu por lei:</h4>
+    <div class="chips">
+      <span class="chip">Confirmar existência</span><span class="chip">Acessar</span><span class="chip">Corrigir</span><span class="chip">Anonimizar/bloquear</span><span class="chip">Portabilidade</span><span class="chip">Eliminar</span><span class="chip">Revogar consentimento</span><span class="chip">Informação sobre compartilhamento</span><span class="chip">Revisão de decisões automatizadas</span>
+    </div>
+    <a class="dpo" href="mailto:contato@droppfy.com?subject=LGPD%20-%20IANF">📮 Canal do Encarregado (DPO): contato@droppfy.com</a>
+  </div>
+</section>
+
+<!-- ================= DIREITOS ================= -->
+<section class="bloco" id="direitos">
+  <span class="rotulo laranja">Propriedade &amp; direitos</span>
+  <h3 class="titulo">Feito, mantido e de <em>direito</em> da xPartner.</h3>
+  <div class="selo-xp">
+    <div class="brasao">xP</div>
+    <div>
+      <b>Vitrine xPartner · droppfy.com</b>
+      <span>IANF — Inteligência Artificial de Nota Fiscal — é produto proprietário da Vitrine xPartner, registrado e operado sob contato@droppfy.com.</span>
+    </div>
+  </div>
+  <div class="grelha">
+    <div class="card"><span class="ico">©</span><h4>Propriedade intelectual</h4><p>O código-fonte, a arquitetura, o design, o nome "IANF", a marca xPartner e seus elementos visuais, os roteadores de integração e o know-how de engenharia pertencem exclusivamente à Vitrine xPartner (Lei 9.609/98 — Software; Lei 9.279/96 — Propriedade Industrial).</p></div>
+    <div class="card"><span class="ico">🚫</span><h4>O que NÃO se pode fazer</h4><p>Copiar, clonar, espelhar, revender, sublicenciar, white-label, extrair telas/banco para concorrente, engenharia reversa ou remover avisos de autoria. Violação = bloqueio + apuração judicial + indenização.</p></div>
+    <div class="card"><span class="ico">✅</span><h4>O que você PODE</h4><p>Usar o sistema para a sua operação durante a franquia ativa, exportar OS SEUS dados e documentos (portabilidade LGPD inclusa), e solicitar suporte e evolução de produto pelo canal oficial.</p></div>
+    <div class="card"><span class="ico">🛡️</span><h4>Seus dados continuam seus</h4><p>Direito autoral do software é da xPartner; o conteúdo fiscal que você produz (notas, lançamentos, cadastros de seus clientes) é SEU. Não reivindicamos nada sobre a sua contabilidade.</p></div>
+  </div>
+</section>
+
+<!-- ================= RODAPÉ ================= -->
+<footer class="rodape">
+  <div class="marca">IANF · xPARTNER</div>
+  <p>Sistema de Balanços &amp; Nota Fiscal com IA — produto da Vitrine xPartner.<br>
+  Contato, suporte, LGPD e direitos: <a href="mailto:contato@droppfy.com">contato@droppfy.com</a> · <a href="https://droppfy.com" target="_blank" rel="noopener">droppfy.com</a><br>
+  Termos vigentes desde 04/11/2026. Este documento é a comunicação oficial do sistema e não substitui aconselhamento jurídico.</p>
+  <p style="margin-top:18px"><a href="/">← Voltar ao login</a></p>
+</footer>
+
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ============================================================
+// REDE NEURAL 3D AGRESSIVA — sinapses pulsantes, disparos, parallax
+// ============================================================
+const canvas = document.getElementById('neural');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0xfff3e2, 0.0016);
+const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 300);
+camera.position.set(0, 0, 34);
+
+const CORES = [0xff6b00, 0xea580c, 0x7c3aed, 0x2563eb, 0x0b0b0f];
+
+// ---- nós da rede (duas conchas + núcleo) ----
+const N = 170;
+const nos = [];
+for (let i = 0; i < N; i++) {
+  const tipo = Math.random();
+  let r;
+  if (tipo < 0.5) r = 15 + Math.random() * 4;
+  else if (tipo < 0.85) r = 8 + Math.random() * 3;
+  else r = Math.random() * 4;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  nos.push(new THREE.Vector3(
+    r * Math.sin(phi) * Math.cos(theta) * 1.25,
+    r * Math.sin(phi) * Math.sin(theta) * 0.85,
+    r * Math.cos(phi)
+  ));
+}
+
+const rede = new THREE.Group();
+scene.add(rede);
+
+// ---- arestas: conecta cada nó aos vizinhos mais próximos ----
+const posAresta = [];
+const corAresta = [];
+const c = new THREE.Color();
+for (let i = 0; i < N; i++) {
+  const dists = nos.map((p, j) => ({ j, d: p.distanceTo(nos[i]) })).filter(o => o.j !== i).sort((a, b) => a.d - b.d);
+  const k = 2 + Math.floor(Math.random() * 2);
+  for (let m = 0; m < k; m++) {
+    const j = dists[m].j;
+    if (j < i) continue;
+    posAresta.push(nos[i].x, nos[i].y, nos[i].z, nos[j].x, nos[j].y, nos[j].z);
+    c.set(CORES[(i + j) % CORES.length]);
+    corAresta.push(c.r, c.g, c.b, c.r * 0.6, c.g * 0.6, c.b * 0.6);
+  }
+}
+const geoA = new THREE.BufferGeometry();
+geoA.setAttribute('position', new THREE.Float32BufferAttribute(posAresta, 3));
+geoA.setAttribute('color', new THREE.Float32BufferAttribute(corAresta, 3));
+const arestas = new THREE.LineSegments(geoA, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.28, depthWrite: false }));
+rede.add(arestas);
+
+// ---- nós como esferas com brilho ----
+const geoNo = new THREE.SphereGeometry(1, 10, 10);
+const meshesNos = [];
+nos.forEach((p, i) => {
+  const cor = CORES[i % CORES.length];
+  const tam = 0.09 + Math.random() * 0.16;
+  const m = new THREE.Mesh(geoNo, new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.9 }));
+  m.position.copy(p);
+  m.scale.setScalar(tam);
+  m.userData = { base: tam, fire: 0 };
+  rede.add(m);
+  meshesNos.push(m);
+});
+
+// ---- pulsos viajando pelas arestas (sinapses) ----
+const PULSOS = 46;
+const pulsos = [];
+const geoPulso = new THREE.SphereGeometry(1, 6, 6);
+for (let i = 0; i < PULSOS; i++) {
+  const e = Math.floor(Math.random() * (posAresta.length / 6));
+  const a = new THREE.Vector3(posAresta[e * 6], posAresta[e * 6 + 1], posAresta[e * 6 + 2]);
+  const b = new THREE.Vector3(posAresta[e * 6 + 3], posAresta[e * 6 + 4], posAresta[e * 6 + 5]);
+  const mesh = new THREE.Mesh(geoPulso, new THREE.MeshBasicMaterial({ color: CORES[i % 4], transparent: true, opacity: 1 }));
+  mesh.scale.setScalar(0.14);
+  rede.add(mesh);
+  pulsos.push({ a, b, t: Math.random(), v: 0.004 + Math.random() * 0.012, mesh });
+}
+
+// ---- poeira de fundo ----
+const starGeo = new THREE.BufferGeometry();
+const starPos = new Float32Array(900 * 3);
+for (let i = 0; i < 900; i++) {
+  starPos[i * 3] = (Math.random() - 0.5) * 160;
+  starPos[i * 3 + 1] = (Math.random() - 0.5) * 110;
+  starPos[i * 3 + 2] = -30 - Math.random() * 60;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 0.09, color: 0x7c3aed, transparent: true, opacity: 0.3, depthWrite: false })));
+
+// ---- parallax ----
+const mouse = { x: 0, y: 0 };
+addEventListener('pointermove', (e) => {
+  mouse.x = (e.clientX / innerWidth) * 2 - 1;
+  mouse.y = (e.clientY / innerHeight) * 2 - 1;
+});
+
+// ---- disparo aleatório (neurônio "acende" e manda pulso) ----
+function disparar() {
+  const i = Math.floor(Math.random() * N);
+  meshesNos[i].userData.fire = 1;
+  setTimeout(disparar, 90 + Math.random() * 260);
+}
+disparar();
+
+const relogio = new THREE.Clock();
+function animar() {
+  requestAnimationFrame(animar);
+  const t = relogio.getElapsedTime();
+
+  rede.rotation.y += 0.0028;
+  rede.rotation.x = Math.sin(t * 0.22) * 0.18 + 0.12;
+  arestas.material.opacity = 0.22 + Math.sin(t * 1.4) * 0.1;
+
+  for (const m of meshesNos) {
+    if (m.userData.fire > 0.01) {
+      m.userData.fire *= 0.92;
+      m.scale.setScalar(m.userData.base * (1 + m.userData.fire * 4.5));
+      m.material.opacity = 0.9;
+    }
+  }
+  for (const p of pulsos) {
+    p.t += p.v;
+    if (p.t > 1) {
+      p.t = 0;
+      const e = Math.floor(Math.random() * (posAresta.length / 6));
+      p.a.set(posAresta[e * 6], posAresta[e * 6 + 1], posAresta[e * 6 + 2]);
+      p.b.set(posAresta[e * 6 + 3], posAresta[e * 6 + 4], posAresta[e * 6 + 5]);
+      p.v = 0.004 + Math.random() * 0.012;
+    }
+    p.mesh.position.lerpVectors(p.a, p.b, p.t);
+    p.mesh.material.opacity = Math.sin(p.t * Math.PI);
+  }
+
+  camera.position.x += (mouse.x * 6 - camera.position.x) * 0.035;
+  camera.position.y += (-mouse.y * 4 - camera.position.y) * 0.035;
+  camera.lookAt(0, 0, 0);
+  renderer.render(scene, camera);
+}
+animar();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
