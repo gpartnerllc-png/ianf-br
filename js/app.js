@@ -103,6 +103,17 @@ function sair() {
   $('auth-gate').classList.remove('hidden');
 }
 
+function togglePass(btn) {
+  const input = $(btn.dataset.eye);
+  if (!input) return;
+  const mostrar = input.type === 'password';
+  input.type = mostrar ? 'text' : 'password';
+  btn.setAttribute('aria-pressed', String(mostrar));
+  btn.setAttribute('aria-label', mostrar ? 'Ocultar a senha' : 'Mostrar a senha');
+  btn.textContent = mostrar ? '🙈' : '👁';
+  input.focus();
+}
+
 async function entrar() {
   $('auth-gate').classList.add('hidden');
   $('app').classList.remove('hidden');
@@ -3046,7 +3057,7 @@ const UI = {
   carregarSaldoZapsign, toggleCertForm, criarCertificado, carregarProtocolos,
   enviarChat, analisarNotaIA, alterarUser, removerUser,
   carregarAssinatura, assinar, salvarWhatsapp, imprimirRecibo,
-  mostrarPausa, fecharPausa, sair,
+  mostrarPausa, fecharPausa, sair, togglePass,
   abrirBalancete, fecharBalancete, imprimirBalancete,
 };
 window.UI = UI;

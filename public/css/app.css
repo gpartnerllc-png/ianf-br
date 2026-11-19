@@ -138,6 +138,17 @@ body {
 .field.big { font-size: 26px; font-weight: 800; }
 textarea.field { resize: vertical; }
 select.field { appearance: none; cursor: pointer; }
+.field-wrap { position: relative; }
+.field-pass { padding-right: 48px; }
+.field-eye {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    width: 32px; height: 32px; border-radius: 9px; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(15, 23, 42, 0.05); color: var(--ink); font-size: 15px; line-height: 1;
+    transition: background 0.2s, color 0.2s;
+}
+.field-eye:hover { background: rgba(139, 92, 246, 0.16); }
+.field-eye[aria-pressed="true"] { background: var(--purple-500); color: #fff; }
 
 /* ---------- Botões ---------- */
 .btn {
